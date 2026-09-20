@@ -126,7 +126,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
   <button class="btn sm" onclick="showTab('settings')">Open setup</button>
 </div>
 <div class="banner" id="runBanner">
-  <div class="b-txt"><b id="rbTitle">Update runningâ€¦</b>
+  <div class="b-txt"><b id="rbTitle">Update running…</b>
     <div class="b-sub" id="rbSub"></div>
     <pre class="log" id="rbTail" style="max-height:52px;margin-top:6px;font-size:11px"></pre></div>
   <button class="btn sec sm" onclick="showTab('history')">History</button>
@@ -136,19 +136,19 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
 <!-- ============================================================ DASHBOARD -->
 <div id="tab-dash">
   <div class="grid cards">
-    <div class="card"><div class="lbl">Updates available</div><div class="val" id="cUpd">â€“</div><div class="sub" id="cUpdSub"></div></div>
-    <div class="card" id="cLastCard" style="cursor:pointer" title="open failed run log"><div class="lbl">Last run</div><div class="val" id="cLast">â€“</div><div class="sub" id="cLastSub"></div></div>
-    <div class="card"><div class="lbl">Next scheduled update</div><div class="val" id="cNext">â€“</div><div class="sub" id="cNextSub"></div></div>
-    <div class="card"><div class="lbl">Server time</div><div class="val" id="cServerTime" style="font-size:18px">â€“</div><div class="sub" id="cServerTzSub"></div></div>
+    <div class="card"><div class="lbl">Updates available</div><div class="val" id="cUpd">–</div><div class="sub" id="cUpdSub"></div></div>
+    <div class="card" id="cLastCard" style="cursor:pointer" title="open failed run log"><div class="lbl">Last run</div><div class="val" id="cLast">–</div><div class="sub" id="cLastSub"></div></div>
+    <div class="card"><div class="lbl">Next scheduled update</div><div class="val" id="cNext">–</div><div class="sub" id="cNextSub"></div></div>
+    <div class="card"><div class="lbl">Server time</div><div class="val" id="cServerTime" style="font-size:18px">–</div><div class="sub" id="cServerTzSub"></div></div>
     <div class="card" id="cInvCard" style="cursor:pointer" title="unused images + networks">
       <div class="lbl">Reclaimable</div><div class="val" id="cInv">–</div><div class="sub" id="cInvSub"></div></div>
     <div class="card"><div class="lbl">Reclaimed (30d)</div><div class="val" id="cReclaim">–</div><div class="sub" id="cReclaimSub"></div></div>
-    <div class="card"><div class="lbl">Total runs</div><div class="val" id="cRuns">â€“</div><div class="sub" id="cRunsSub"></div></div>
+    <div class="card"><div class="lbl">Total runs</div><div class="val" id="cRuns">–</div><div class="sub" id="cRunsSub"></div></div>
   </div>
 
   <section>
     <div class="spread"><h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks â†’</a></div>
-    <div class="panel"><table><thead><tr><th>Stack</th><th class="num">Services</th><th>Updates</th><th>Images</th></tr></thead><tbody id="dashStacks"><tr><td colspan=4 class="empty">Loadingâ€¦</td></tr></tbody></table></div>
+    <div class="panel"><table><thead><tr><th>Stack</th><th class="num">Services</th><th>Updates</th><th>Images</th></tr></thead><tbody id="dashStacks"><tr><td colspan=4 class="empty">Loading…</td></tr></tbody></table></div>
   </section>
 
   <section>
@@ -166,15 +166,15 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     </div></div>
   <div class="panel"><table>
     <thead><tr><th>Stack</th><th>Service</th><th>Image</th><th>Mode</th><th>Update</th><th></th></tr></thead>
-    <tbody id="stackRows"><tr><td colspan=6 class="empty">Loadingâ€¦</td></tr></tbody>
+    <tbody id="stackRows"><tr><td colspan=6 class="empty">Loading…</td></tr></tbody>
   </table></div>
 </div>
 
 <!-- ============================================================== HISTORY -->
 <div id="tab-history" style="display:none">
   <div class="grid cards">
-    <div class="card"><div class="lbl">Success rate</div><div class="val" id="hRate">â€“</div><div class="sub">last 200 runs</div></div>
-    <div class="card"><div class="lbl">Avg duration</div><div class="val" id="hDur">â€“</div><div class="sub">full updates</div></div>
+    <div class="card"><div class="lbl">Success rate</div><div class="val" id="hRate">–</div><div class="sub">last 200 runs</div></div>
+    <div class="card"><div class="lbl">Avg duration</div><div class="val" id="hDur">–</div><div class="sub">full updates</div></div>
   </div>
   <section>
     <h2>Run duration &amp; outcome</h2>
@@ -183,7 +183,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
   <section>
     <h2>Run log</h2>
     <div class="panel"><table><thead><tr><th>Run</th><th>Kind</th><th>Trigger</th><th>When</th><th class="num">Duration</th><th>Result</th><th></th></tr></thead>
-    <tbody id="histRows"><tr><td colspan=7 class="empty">Loadingâ€¦</td></tr></tbody></table></div>
+    <tbody id="histRows"><tr><td colspan=7 class="empty">Loading…</td></tr></tbody></table></div>
     <pre class="log" id="runLog" style="display:none"></pre>
   </section>
 </div>
@@ -231,12 +231,12 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
       </select>
     </div>
     <div class="b-sub" style="color:var(--mut);font-size:12px;margin-top:8px">
-      Server time: <span id="sServerTime">â€“</span> (<span id="sServerTz">â€“</span>) â€” the schedule refers to this clock.
+      Server time: <span id="sServerTime">–</span> (<span id="sServerTz">–</span>) â€” the schedule refers to this clock.
     </div>
     <label class="f">Max parallel deploys</label><input type="number" id="sPar" min="1" max="10">
     <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
     <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
-    <label class="f">Portainer compose dir (self-update, host path)</label><input type="text" id="sCompose" placeholder="/opt/portainer">
+    <label class="f" style="margin-top:12px"><input type="checkbox" id="sIncludePortainer"> Also update Portainer itself (redeploys the Portainer stack at the end of every full update)</label><label class="f">Self stack name (this app's and Portainer's stack name, e.g. portainer_update_service,portainer — empty = auto-detect)</label><input type="text" id="sSelfStack"><label class="f">Portainer compose dir (fallback only — when Portainer is NOT deployed as a Portainer stack)</label><input type="text" id="sCompose" placeholder="host path, mounted into the container as /host-portainer">
     <label class="f">Portainer compose dir (fallback: only when Portainer is NOT a Portainer stack)</label>
     <input type="text" id="sCompose" placeholder="empty = use include_portainer mode">
     <label class="f">Check cache (minutes)</label><input type="number" id="sCache" min="5" max="720">
@@ -249,12 +249,15 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     <div class="row" style="margin-top:20px">
       <button class="btn" id="btnSave">Save settings</button>
     </div>
+    <p style="color:var(--mut);font-size:12px;margin-top:14px">Settings are persisted to
+      <code>config/config.yaml</code> in the mounted config volume and survive container rebuilds.</p>
     <div class="divider"></div>
-    <h2 style="color:var(--err)">Maintenance (destructive)</h2>
+    <h2>Maintenance</h2>
     <div class="row">
-      <button class="btn danger" id="btnPrune">Run docker prune now</button>
+      <button class="btn danger" id="btnPrune">Clean up unused images now</button>
+      <span style="color:var(--mut);font-size:12.5px">removes all unused images &amp; build cache
+        — previous image versions can't be rolled back afterwards</span>
     </div>
-    <p class="mono" style="margin-top:14px">config lives in config/config.yaml (gitignored)</p>
   </div>
 </div>
 </main>
@@ -277,8 +280,8 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
 
 <script>
 const $=id=>document.getElementById(id);
-const fmt=s=>s?new Date(s*1000).toLocaleString():'â€“';
-const ago=s=>{if(!s)return'â€“';const d=Math.floor(Date.now()/1000-s);
+const fmt=s=>s?new Date(s*1000).toLocaleString():'–';
+const ago=s=>{if(!s)return'–';const d=Math.floor(Date.now()/1000-s);
  if(d<60)return d+'s ago';if(d<3600)return Math.floor(d/60)+'m ago';
  if(d<86400)return Math.floor(d/3600)+'h ago';return Math.floor(d/86400)+'d ago'};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -329,29 +332,29 @@ async function refresh(){
   $('hdrInfo').textContent=s.configured?'':'not configured';
   $('hdrInfo').title='';
   AUTH_ENABLED=!!s.auth_enabled;
-  if(s.auth_enabled&&!AUTH_TOKEN)$('hdrInfo').textContent+=' Â· auth required';
+  if(s.auth_enabled&&!AUTH_TOKEN)$('hdrInfo').textContent+=' · auth required';
   // setup banner
   $('setupBanner').classList.toggle('open',!s.configured);
   // run banner: poll fast while busy
   if(busy){await refreshRunBanner(s)}
   else{$('runBanner').classList.remove('open');stopLiveLog()}
-  $('cUpd').textContent=s.check&&s.check.checked_at!=null?s.check.updates_available:'â€“';
+  $('cUpd').textContent=s.check&&s.check.checked_at!=null?s.check.updates_available:'–';
   $('cUpdSub').textContent=s.check&&s.check.checked_at?('checked '+ago(s.check.checked_at)):'no check yet';
   const lr=s.last_run;
   lastFailedRun=lr&&!lr.success&&lr.run_id?lr.run_id:null;
-  $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success?'OK':'FAILED'):'â€“';
+  $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success?'OK':'FAILED'):'–';
   $('cLast').style.color=lr?(lr.success?'var(--ok)':'var(--err)'):'var(--txt)';
-  $('cLastSub').textContent=lr?(ago(lr.finished)+' Â· '+lr.kind+' Â· '+(lr.duration_s??'?')+'s'):'no runs yet';
+  $('cLastSub').textContent=lr?(ago(lr.finished)+' · '+lr.kind+' · '+(lr.duration_s??'?')+'s'):'no runs yet';
   if(s.scheduler){
    const nf=s.scheduler.next_full_update;
    const desc=s.scheduler.schedule_desc||'';
    // server time card
-   $('cServerTime').textContent=s.scheduler.server_time_local||'â€“';
-   $('cServerTzSub').textContent=(s.scheduler.server_tz||'')+' Â· '+desc;
+   $('cServerTime').textContent=s.scheduler.server_time_local||'–';
+   $('cServerTzSub').textContent=(s.scheduler.server_tz||'')+' · '+desc;
    if(nf){
     const delta=Math.round((nf-Date.now()/1000)/60);
     if(delta<0){$('cNext').textContent='overdue';$('cNext').style.color='var(--warn)';
-      $('cNextSub').textContent=`by ${Math.abs(delta)} min Â· ${desc}`}
+      $('cNextSub').textContent=`by ${Math.abs(delta)} min · ${desc}`}
     else{
      $('cNext').textContent=new Date(nf*1000).toLocaleString([],{
       weekday:'short',hour:'2-digit',minute:'2-digit'});
@@ -360,7 +363,7 @@ async function refresh(){
     }
    }
    if(s.scheduler.consecutive_failures>0){
-    $('cNextSub').textContent+=' Â· '+s.scheduler.consecutive_failures+' failures (backoff)';
+    $('cNextSub').textContent+=' · '+s.scheduler.consecutive_failures+' failures (backoff)';
    }
   }
   // inventory card
@@ -369,7 +372,18 @@ async function refresh(){
    $('cInvSub').textContent='of '+s.inventory.images_total+' images · '+s.inventory.networks_unused+' unused networks';
   }
   $('cRuns').textContent=s.runs_total??'–';
-  $('cRunsSub').textContent='all time';
+  // inventory + reclaim cards (live)
+  try{
+   const inv=await api('/api/inventory');
+   $('cInv').textContent=inv.images_unused+' ('+inv.images_unused_mb+' MB)';
+   $('cInvSub').textContent='of '+inv.images_total+' images · '+inv.networks_unused+' unused networks';
+  }catch(_){$('cInv').textContent='–';$('cInvSub').textContent='unavailable'}
+  try{
+   const hh=await api('/api/history');
+   const ps=hh.prune_stats_30d||{};
+   $('cReclaim').textContent=(ps.reclaimed_mb_30d||0)+' MB';
+   $('cReclaimSub').textContent='in '+(ps.prune_runs_30d||0)+' prunes · '+(ps.images_deleted_30d||0)+' images';
+  }catch(_){$('cReclaim').textContent='–';$('cReclaimSub').textContent='unavailable'}
   $('cRunsSub').textContent='all time';
   if(currentTab()==='dash')renderDashStacks(s.stacks||{});
   gateBusyFlag=!!busy;
@@ -393,9 +407,9 @@ async function refreshRunBanner(s){
   const steps=c.steps||[];
   const okN=steps.filter(x=>x.ok).length;
   const lastStep=steps.length?steps[steps.length-1].name:'starting';
-  $('rbTitle').textContent=(PHASES[c.holder]||c.holder||'job')+' runningâ€¦';
+  $('rbTitle').textContent=(PHASES[c.holder]||c.holder||'job')+' running…';
   const tail=(c.log_tail||[]).slice(-2).join('').trim();
-  $('rbSub').textContent=(steps.length?`step ${esc(lastStep)} Â· ${okN}/${steps.length} done Â· `:'')+
+  $('rbSub').textContent=(steps.length?`step ${esc(lastStep)} · ${okN}/${steps.length} done · `:'')+
    Math.round((Date.now()/1000-c.since)/60*10)/10+' min elapsed';
   $('rbTail').textContent=tail;
   $('rbLogBtn').onclick=()=>showRunLog(c.run_id,true);
@@ -420,7 +434,7 @@ function stopLiveLog(){if(liveLogTimer){clearInterval(liveLogTimer);liveLogTimer
  const p=$('runLog');if(p)p._live=null}
 async function showRunLog(id,live=false){
  if(currentTab()!=='history')showTab('history');
- const p=$('runLog');p.style.display='block';p.textContent='loadingâ€¦';
+ const p=$('runLog');p.style.display='block';p.textContent='loading…';
  p.scrollIntoView({behavior:'smooth',block:'nearest'});
  stopLiveLog();
  try{p.textContent=await (await fetch('/api/runs/'+encodeURIComponent(id)+'/log')).text()}
@@ -489,7 +503,7 @@ async function renderRunChart(){
 /* ----------------------------------------------------------------- stacks */
 async function loadStacks(){
  const tb=$('stackRows');
- tb.innerHTML='<tr><td colspan=6 class="empty">Loadingâ€¦</td></tr>';
+ tb.innerHTML='<tr><td colspan=6 class="empty">Loading…</td></tr>';
  try{
   const s=await api('/api/stacks');
   $('stackCheckInfo').textContent=s.checked_at?('checked '+ago(s.checked_at)):'no check data yet';
@@ -540,7 +554,7 @@ async function redeployStack(id,name){
 let modalStackId=null;
 async function openStack(name,focusSvc,focusSvcName){
  $('modalBg').classList.add('open');$('mTitle').textContent=name||'Stack';
- $('mBody').innerHTML='<div class="empty">loadingâ€¦</div>';$('mCompose').textContent='';
+ $('mBody').innerHTML='<div class="empty">loading…</div>';$('mCompose').textContent='';
  try{
   let id;
   if(name){const st=await api('/api/stacks');const meta=st.stacks.find(x=>x.name===name);
@@ -583,7 +597,7 @@ async function openStack(name,focusSvc,focusSvcName){
       if(!confirm(`Tag "${typed}" not found in registry tag list. Deploy anyway?`))return;
      }
     }catch(_){}
-    btn.disabled=true;btn.textContent='Deployingâ€¦';
+    btn.disabled=true;btn.textContent='Deploying…';
     try{await api(`/api/stacks/${id}/image`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({service:svc,image:val})});
      toast(`${svc} -> ${val} deployed`,'ok');loadStacks();refresh();
@@ -592,7 +606,7 @@ async function openStack(name,focusSvc,focusSvcName){
    };
    const tagsBtn=document.createElement('button');tagsBtn.className='btn sm sec';tagsBtn.textContent='Show available tags';
    tagsBtn.onclick=async()=>{
-    tagsBtn.disabled=true;tagsBtn.textContent='Loadingâ€¦';
+    tagsBtn.disabled=true;tagsBtn.textContent='Loading…';
     try{
      const v=await api('/api/versions?image='+encodeURIComponent(img));
      info.innerHTML='';
@@ -621,15 +635,15 @@ $('modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
 /* ---------------------------------------------------------------- history */
 async function loadHistory(){
  const tb=$('histRows');
- tb.innerHTML='<tr><td colspan=7 class="empty">Loadingâ€¦</td></tr>';
+ tb.innerHTML='<tr><td colspan=7 class="empty">Loading…</td></tr>';
  try{
   const hr=await api('/api/history');
   const h=hr.history||[];
   const okN=h.filter(r=>r.success).length;
-  $('hRate').textContent=h.length?Math.round(okN/h.length*100)+'%':'â€“';
+  $('hRate').textContent=h.length?Math.round(okN/h.length*100)+'%':'–';
   const full=h.filter(r=>r.kind==='full');
   const durs=full.map(r=>r.duration_s).filter(x=>x!=null);
-  $('hDur').textContent=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length)+'s':'â€“';
+  $('hDur').textContent=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length)+'s':'–';
   if(!h.length){tb.innerHTML='<tr><td colspan=7 class="empty">No runs yet.</td></tr>'}
   else{
    tb.innerHTML='';
@@ -659,14 +673,7 @@ async function loadHistory(){
   }
  }catch(e){tb.innerHTML=`<tr><td colspan=7 class="empty">${esc(e.message)}</td></tr>`}
 }
-async function showRunLog(id,live=false){
- if(currentTab()!=='history')showTab('history');
- const p=$('runLog');p.style.display='block';p.textContent='loadingâ€¦';
- p.scrollIntoView({behavior:'smooth',block:'nearest'});
- try{p.textContent=await (await fetch('/api/runs/'+encodeURIComponent(id)+'/log')).text()}
- catch(e){p.textContent=e.message}
- if(live)p._live=id;
-}
+$('cInvCard').onclick=()=>showTab('stacks');
 $('cLastCard').onclick=()=>{if(lastFailedRun)showRunLog(lastFailedRun);else showTab('history')};
 
 /* --------------------------------------------------------------- settings */
@@ -679,13 +686,14 @@ async function loadSettings(){
   $('sDay').value=s.update_schedule_day??0;$('sPar').value=s.max_parallel_deploys??3;
   $('sWait').value=s.deploy_wait_time??300;$('sCompose').value=s.portainer_compose_dir||'';
   $('sSelfStack').value=s.self_stack_name||'';
+  $('sIncludePortainer').checked=!!s.include_portainer;
   $('sCache').value=s.check_cache_minutes??30;$('sKeep').value=s.keep_backups??5;
   $('sHook').value=s.notify_webhook||'';$('sRep').checked=!!(s.repairs&&s.repairs.enabled);
   toggleScheduleMode();
   // server time + tz
   try{
    const st=await api('/api/status');
-   $('sServerTime').textContent=st.scheduler.server_time_local||'â€“';
+   $('sServerTime').textContent=st.scheduler.server_time_local||'–';
    $('sServerTz').textContent=st.scheduler.server_tz||'';
   }catch(_){}
  }catch(e){toast(e.message,'err')}
@@ -701,7 +709,7 @@ $('sMode').onchange=toggleScheduleMode;
 /* endpoint scan: list Portainer endpoints, let user pick one */
 $('btnScan').onclick=async()=>{
  const res=$('scanResult');
- res.style.display='block';res.textContent='scanningâ€¦';
+ res.style.display='block';res.textContent='scanning…';
  try{
   const u=$('sUrl').value.trim();
   let q='';
@@ -712,7 +720,7 @@ $('btnScan').onclick=async()=>{
   const box=document.createElement('div');box.className='tag-sel';
   r.endpoints.forEach(e=>{
    const b=document.createElement('button');
-   b.textContent=`${e.name} (ID ${e.id}${e.type===1?' Â· local':''})`;
+   b.textContent=`${e.name} (ID ${e.id}${e.type===1?' · local':''})`;
    b.onclick=()=>{$('sEid').value=e.id;$('scanResult').style.display='none'};
    box.appendChild(b);
   });
@@ -728,7 +736,7 @@ $('btnSave').onclick=async()=>{
    keep_backups:+$('sKeep').value||5,
    portainer_compose_dir:$('sCompose').value.trim(),check_cache_minutes:+$('sCache').value||30,
    notify_webhook:$('sHook').value.trim(),self_stack_name:$('sSelfStack').value.trim(),
-   tls_verify:$('sTls').checked};
+   tls_verify:$('sTls').checked,include_portainer:$('sIncludePortainer').checked,self_stack_name:$('sSelfStack').value.trim()};
   const mode=$('sMode').value;
   body.update_schedule_mode=mode;
   if(mode==='interval')body.update_interval_hours=+$('sInt').value||168;
@@ -740,22 +748,23 @@ $('btnSave').onclick=async()=>{
   if($('sEid').value.trim()!=='')body.portainer_endpoint_id=+$('sEid').value;
   await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   toast('Settings saved','ok');refresh();
-  // first-run convenience: after credentials are set, start the first check
-  if(body.portainer_api_key||body.portainer_url){
+  // first-run convenience: only when credentials were JUST set
+  const firstRun=body.portainer_url&&body.portainer_api_key;
+  if(firstRun){
    try{await api('/api/check',{method:'POST',body:JSON.stringify({force:true})});
-    toast('First update check started','ok')}catch(e){}
+    toast('Connected. First check started - open Stacks to see per-service status','ok')}catch(e){}
   }
  }catch(e){toast(e.message,'err')}
 };
 $('btnTest').onclick=async()=>{
- $('testResult').textContent='testingâ€¦';
+ $('testResult').textContent='testing…';
  try{
   const body={portainer_url:$('sUrl').value.trim()};
   const key=$('sKey').value.trim();
   if(key&&key!=='***')body.portainer_api_key=key;
   const r=await api('/api/test',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)});
-  $('testResult').textContent=`OK - Portainer ${r.version} Â· endpoint ${r.endpoint_id}`;
+  $('testResult').textContent=`OK - Portainer ${r.version} · endpoint ${r.endpoint_id}`;
  }catch(e){$('testResult').textContent='FAILED: '+e.message}
 };
 $('btnPrune').onclick=async()=>{

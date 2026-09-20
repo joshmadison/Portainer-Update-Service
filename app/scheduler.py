@@ -22,7 +22,6 @@ NEXT_FILE = DATA_DIR / "schedule.json"
 BOOT_GRACE_S = 600        # no scheduled full update in the first 10 min after start
 MAX_BACKOFF_S = 6 * 3600  # consecutive-failure backoff ceiling
 
-
 def _load_next() -> dict:
     if NEXT_FILE.exists():
         try:
@@ -30,7 +29,6 @@ def _load_next() -> dict:
         except (json.JSONDecodeError, OSError):
             pass
     return {}
-
 
 def _save_next(next_check: float, next_full: float) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,7 +38,6 @@ def _save_next(next_check: float, next_full: float) -> None:
         "spec": _spec(),
     }), encoding="utf-8")
     tmp.replace(NEXT_FILE)
-
 
 def _spec() -> str:
     """Compact identity of the current schedule configuration.
@@ -54,7 +51,6 @@ def _spec() -> str:
         return f"weekly:{int(get('update_schedule_day', 0))}:{t}"
     return f"daily:{t}"
 
-
 def _schedule_desc() -> str:
     """Human-readable description of the active schedule."""
     mode = get("update_schedule_mode", "interval")
@@ -65,20 +61,6 @@ def _schedule_desc() -> str:
         days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         return f"{days[int(get('update_schedule_day', 0)) % 7]} at {t}"
     return f"daily at {t}"
-
-
-def _spec() -> str:
-    """Compact identity of the current schedule configuration.
-    Persisted alongside next-run timestamps: if the config's spec changes
-    while the app is off, the next-run times are recomputed on boot."""
-    mode = get("update_schedule_mode", "interval")
-    if mode == "interval":
-        return f"interval:{self._interval() if False else get('update_interval_hours', 168)}"
-    t = get("update_schedule_time", "03:30")
-    if mode == "weekly":
-        return f"weekly:{int(get('update_schedule_day', 0))}:{t}"
-    return f"daily:{t}"
-
 
 def _next_full_from(now_ts: float) -> float:
     """Compute the next full-update epoch from the configured schedule."""
@@ -99,7 +81,6 @@ def _next_full_from(now_ts: float) -> float:
         while cand.weekday() != target_wd:
             cand += timedelta(days=1)
     return time.mktime(cand.timetuple())  # DST-aware local -> epoch
-
 
 class Scheduler:
     def __init__(self):
@@ -310,6 +291,5 @@ class Scheduler:
 
     def is_busy(self):
         return gate.is_busy()
-
 
 scheduler = Scheduler()
