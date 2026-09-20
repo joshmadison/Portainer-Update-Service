@@ -423,6 +423,36 @@ def api_update():
     return jsonify({"ok": True, "run_id": run_id})
 
 
+@app.route("/api/self_update", methods=["POST"])
+def api_self_update():
+    """'Update PUS' button: deliberately redeploy this app's own stack.
+
+    Runs in a thread - the redeploy replaces this container mid-request,
+    so the response may never reach the browser (expected!). The run is
+    recorded in history BEFORE the container dies."""
+    if not gate.try_acquire("self_update"):
+        return _err("another job is running - see /api/runs/current", 409)
+    try:
+        runlog = RunLogger("self_update", "manual")
+        gate.set_runlog(runlog)
+        runlog.step("self_update_started", True)
+
+        def _worker():
+            try:
+                updater.self_update_run(runlog)
+            except Exception:  # noqa: BLE001 - the process may die mid-request
+                pass
+
+        threading.Thread(target=_worker, daemon=True).start()
+        # give the redeploy a moment to fire; if the container survives
+        # (nothing to do / error), the worker has finished already
+        threading.Event().wait(2.0)
+        return jsonify({"ok": True, "run_id": runlog.run_id,
+                        "note": "redeploying - container will restart"})
+    finally:
+        gate.release()
+
+
 @app.route("/api/inventory")
 def api_inventory():
     """Docker inventory for the dashboard: unused images (reclaimable),

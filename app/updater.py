@@ -6,6 +6,8 @@ Sections:
   cleanup_docker()        -> image+buildcache prune ONLY (containers/networks of
                              stopped stacks are preserved - they mark user intent)
   redeploy_stacks()       -> parallel redeploy with verification + sequential retry
+                             (excludes this app's own stack - see self_update_run())
+  self_update_run()       -> deliberate 'Update PUS' redeploy of this app's stack
   update_portainer()      -> compose pull/up of Portainer itself (LAST step)
   reconciliation_sweep()  -> post-run re-verify of all stacks
   post_deployment_repairs()-> network/gateway repairs (config-toggled)
@@ -237,11 +239,12 @@ def _expected_services(compose_text, env):
 
 def _self_stack_names(client, eid) -> list:
     """Detect the compose project(s) that RUN this service (if any), so the
-    engine can defer them to the very end of an update run (redeploying the
-    running service itself would kill this process mid-verification).
+    engine can exclude them from update runs (redeploying the running
+    service itself would kill this process mid-verification).
 
-    Heuristic: '<project>-<service>-<idx>' container hostname, matched
-    against compose-project candidates whose containers exist.
+    Detection: the container whose name equals this container's hostname IS
+    this app - its compose-project label is the self stack. This works with
+    a fixed container_name as well as compose-generated hostnames.
     """
     import socket
     names = set()
@@ -260,10 +263,10 @@ def _self_stack_names(client, eid) -> list:
         lbl = ((c.get("Labels") or {}).get("com.docker.compose.project") or "").lower()
         if lbl:
             candidates.add(lbl)
-            # a compose container whose project name starts the hostname
-            if cname and (lbl == cname or cname.startswith(lbl + "-")):
-                names.add(lbl)
-    # container hostname is often '<project>-<service>-<idx>'
+            for n in c.get("Names") or []:
+                if n.lstrip("/").lower() == cname:
+                    names.add(lbl)  # this container IS this app
+    # compose-generated hostname heuristic: '<project>-<service>-<idx>'
     project = cname.split("-")[0] if "-" in cname else ""
     if project and project in candidates:
         names.add(project)
@@ -334,9 +337,10 @@ def redeploy_single_stack(client, stack, eid, log) -> bool:
 def redeploy_stacks(client, eid, stacks, log, max_parallel=None) -> tuple:
     """Parallel redeploy + sequential retry. Returns (ok, failed_names).
 
-    Stacks matching self_stack_names are DEFERRED to the very end of the run
-    (self-update protection): redeploying the running service itself would
-    kill this process mid-verification. Returns (ok, failed, deferred_names).
+    Stacks matching self_stack_names (this app's own stack) are EXCLUDED
+    entirely: redeploying the running service itself would kill this
+    process mid-verification. Use /api/self_update (Settings button) to
+    update it deliberately. Returns (ok, failed, excluded_names).
     """
     max_parallel = max_parallel or int(get("max_parallel_deploys", 3))
     if not stacks:
@@ -345,10 +349,10 @@ def redeploy_stacks(client, eid, stacks, log, max_parallel=None) -> tuple:
 
     self_names = set(_self_stack_names(client, eid))
     parallel = [s for s in stacks if (s.get("Name") or "") not in self_names]
-    deferred = [s for s in stacks if (s.get("Name") or "") in self_names]
-    if deferred:
-        log(f"[INFO] Deferring self-stack redeploy to end of run: "
-            f"{', '.join(s.get('Name') for s in deferred)}")
+    excluded = [s.get("Name", "") for s in stacks if (s.get("Name") or "") in self_names]
+    if excluded:
+        log(f"[INFO] Excluding this app's own stack from the run "
+            f"(use 'Update PUS' in Settings): {', '.join(excluded)}")
     log(f"Found {len(stacks)} stacks. Deploying {len(parallel)} now "
         f"(max {max_parallel} parallel)...")
 
@@ -373,9 +377,50 @@ def redeploy_stacks(client, eid, stacks, log, max_parallel=None) -> tuple:
                 still.append(name)
         if still:
             log(f"[ERROR] Stacks failed permanently: {', '.join(still)}")
-            return False, still, [s.get("Name") for s in deferred]
+            return False, still, excluded
     log(f"[OK] All {len(parallel)} stacks deployed successfully.")
-    return True, [], [s.get("Name") for s in deferred]
+    return True, [], excluded
+
+
+def self_update_run(runlog) -> bool:
+    """Deliberate self-update of this app's own stack (Settings button).
+
+    Runs OUTSIDE the normal update run's history: finalizes the caller's
+    log first, then redeploys the own stack. The redeploy terminates this
+    container mid-request - the new container takes over on the next
+    scheduled run. History is finalized FIRST so the run is recorded."""
+    client = Portainer(get("portainer_url"), get("portainer_api_key"),
+                       endpoint_id=get("portainer_endpoint_id"),
+                       tls_verify=bool(get("tls_verify", False)))
+    try:
+        eid = client.resolve_endpoint(_hostname())
+    except PortainerError as e:
+        runlog.log(f"[ERROR] {e}")
+        runlog.finish(False)
+        return False
+    self_names = set(_self_stack_names(client, eid))
+    if not self_names:
+        runlog.log("[ERROR] Could not identify this app's own stack - "
+                   "is this app really deployed as a Portainer stack?")
+        runlog.finish(False)
+        return False
+    try:
+        stacks = [s for s in client.stacks() if s.get("EndpointId") == eid]
+    except PortainerError as e:
+        runlog.log(f"[ERROR] Could not fetch stacks: {e}")
+        runlog.finish(False)
+        return False
+    own = next((s for s in stacks if (s.get("Name") or "") in self_names), None)
+    if not own:
+        runlog.log(f"[ERROR] No stack matching self project(s) "
+                   f"{', '.join(sorted(self_names))} found.")
+        runlog.finish(False)
+        return False
+    ok = redeploy_single_stack(client, own, eid, runlog.log)
+    runlog.finish(ok)
+    # if we get here the redeploy failed or completed before the container
+    # was replaced; either way the caller records the result
+    return ok
 
 
 # ------------------------------------------------------------ portainer update
@@ -775,37 +820,18 @@ def run_full_update(runlog) -> bool:
         runlog.log(f"[ERROR] Could not fetch stacks: {e}")
         return False
 
-    ok_stacks, failed, deferred = redeploy_stacks(client, eid, stacks, runlog.log)
+    ok_stacks, failed, excluded = redeploy_stacks(client, eid, stacks, runlog.log)
     runlog.step("redeploy_stacks", ok_stacks, f"failed: {', '.join(failed)}" if failed else "")
     ok_sweep = reconciliation_sweep(client, eid, stacks, runlog.log)
     runlog.step("reconciliation_sweep", ok_sweep)
     ok_repairs = post_deployment_repairs(client, eid, runlog.log)
     runlog.step("post_deployment_repairs", ok_repairs)
-    # Portainer self-update LAST (before deferred self-stacks): restarting the
-    # API mid-run would blind the sweep. After a self-update, WAIT for the
-    # API to come back so a follow-up check/sweep doesn't run against a
-    # restarting Portainer.
+    # Portainer self-update LAST: restarting the API mid-run would blind
+    # the sweep. After a self-update, WAIT for the API to come back so a
+    # follow-up check/sweep doesn't run against a restarting Portainer.
     ok_port = update_portainer(client, eid, runlog.log)
     runlog.step("update_portainer", ok_port)
-    if ok_port:
+    if ok_port and get("include_portainer", False):
         wait_portainer_ready(client, runlog.log)
-
-    # --- SELF-STACK UPDATE: the very last action --------------------------
-    # If this service runs as a Portainer stack on this host, redeploying it
-    # would terminate this process. Therefore: finalize history FIRST (the
-    # run is recorded as success even though the process is about to die),
-    # then redeploy the deferred self-stack(s). The new container takes over
-    # on the next run.
-    if deferred:
-        names = ", ".join(deferred)
-        runlog.log(f"[INFO] Finalizing run before self-update of: {names}")
-        runlog.finish(ok_stacks and ok_port and ok_sweep and ok_repairs)
-        for dname in deferred:
-            stack = next((s for s in stacks if s.get("Name") == dname), None)
-            if stack:
-                try:
-                    redeploy_single_stack(client, stack, eid, runlog.log)
-                except Exception as e:  # noqa: BLE001 - process may die here
-                    runlog.log(f"[ERROR] self-update of {dname} failed: {e}")
 
     return ok_stacks and ok_port and ok_sweep and ok_repairs

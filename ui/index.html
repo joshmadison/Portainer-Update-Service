@@ -237,6 +237,10 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
       <button class="btn sec sm" id="btnMountCheck">Check compose mount</button>
       <span class="mono" id="mountCheckResult"></span>
     </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btnSelfUpdate">Update PUS</button>
+      <span style="color:var(--mut);font-size:12px">redeploys this app's own stack (its container restarts) - excluded from regular update runs</span>
+    </div>
     <label class="f">Failure notification webhook (optional, e.g. ntfy)</label><input type="url" id="sHook" placeholder="https://ntfy.example/your-topic">
 
     <div class="divider"></div>
@@ -395,6 +399,7 @@ const PHASES={preflight:'pre-flight checks',backup:'Portainer backup',prune:'doc
  redeploy_stacks:'redeploying stacks',reconciliation_sweep:'verification sweep',
  post_deployment_repairs:'post-deployment repairs',update_portainer:'Portainer self-update',
  docker_prune:'docker prune',pin_version:'version pin',update:'Full update',
+ self_update:'PUS self-update',
  check:'Update check',redeploy:'Stack redeploy'};
 /* translate raw log lines into a friendly ongoing-activity line */
 function activityLine(tail){
@@ -760,6 +765,13 @@ $('btnMountCheck').onclick=async()=>{
   res.textContent=r.message||String(r.state);
   res.style.color=r.ok?'var(--ok)':'var(--err)';
  }catch(e){res.textContent=e.message;res.style.color='var(--err)'}
+};
+$('btnSelfUpdate').onclick=async()=>{
+ if(!confirm('Update this app (PUS) now?\n\nRedeploys its own stack - the container will restart and the UI reconnects in a few seconds.'))return;
+ try{const r=await api('/api/self_update',{method:'POST'});
+  toast('PUS self-update started - run '+r.run_id,'ok',true);
+  gateBusyFlag=true;setBusyUI(true);ensureBannerTimer();await refreshRunBanner()}
+ catch(e){toast(e.message,'err')}
 };
 $('btnTest').onclick=async()=>{
  $('testResult').textContent='testing…';
