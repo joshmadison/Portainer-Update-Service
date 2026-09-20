@@ -24,7 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import compose as compose_mod
-from .config import get
+from .config import DATA_DIR, get
 from .jobs import gate
 from .portainer import Portainer, PortainerError
 
@@ -242,34 +242,56 @@ def _self_stack_names(client, eid) -> list:
     engine can exclude them from update runs (redeploying the running
     service itself would kill this process mid-verification).
 
-    Detection: the container whose name equals this container's hostname IS
-    this app - its compose-project label is the self stack. This works with
-    a fixed container_name as well as compose-generated hostnames.
+    Deterministic detection - two signals, either matches:
+    1. Mount identity: this container's /app/data bind-mount host path
+       (read from /proc/self/mountinfo) is compared against every
+       container's inspect() Mounts - THE definitive signal, immune to
+       hostname/container_name/stack-name mismatches.
+    2. Name match: this container's hostname equals a container's name
+       (works when the stack sets hostname: explicitly).
     """
     import socket
-    names = set()
 
+    # signal 1: real host source path of OUR /app/data bind mount
+    own_source = None
     try:
-        cname = socket.gethostname().lower()
-    except Exception:  # noqa: BLE001
-        return sorted(names)
+        with open("/proc/self/mountinfo", encoding="utf-8") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) > 4 and parts[4] == str(DATA_DIR):
+                    own_source = parts[3]
+                    break
+    except OSError:
+        pass
 
+    names = set()
     try:
         cs = client.all_containers(eid)
     except PortainerError:
         return sorted(names)
-    candidates = set()
     for c in cs:
         lbl = ((c.get("Labels") or {}).get("com.docker.compose.project") or "").lower()
-        if lbl:
-            candidates.add(lbl)
-            for n in c.get("Names") or []:
-                if n.lstrip("/").lower() == cname:
-                    names.add(lbl)  # this container IS this app
-    # compose-generated hostname heuristic: '<project>-<service>-<idx>'
-    project = cname.split("-")[0] if "-" in cname else ""
-    if project and project in candidates:
-        names.add(project)
+        if not lbl:
+            continue
+        cid = c.get("Id")
+        # signal 1: same /app/data bind source
+        if own_source:
+            try:
+                info = client.inspect_container(cid, eid)
+                for m in info.get("Mounts") or []:
+                    if (m.get("Type") == "bind"
+                            and m.get("Destination") == str(DATA_DIR)
+                            and m.get("Source") == own_source):
+                        names.add(lbl)
+            except PortainerError:
+                pass
+        # signal 2: container name == our hostname
+        for n in c.get("Names") or []:
+            try:
+                if n.lstrip("/").lower() == socket.gethostname().lower():
+                    names.add(lbl)
+            except OSError:
+                pass
     return sorted(names)
 
 

@@ -180,7 +180,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
 
 <!-- ============================================================ SETTINGS -->
 <div id="tab-settings" style="display:none">
-  <div class="panel" style="max-width:640px">
+  <div class="panel" style="max-width:640px;margin:0 auto">
 
     <h2>Connection</h2>
     <label class="f">Portainer URL</label><input type="url" id="sUrl" placeholder="https://portainer:9443">
@@ -237,10 +237,17 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
       <button class="btn sec sm" id="btnMountCheck">Check compose mount</button>
       <span class="mono" id="mountCheckResult"></span>
     </div>
-    <div class="row" style="margin-top:14px">
-      <button class="btn" id="btnSelfUpdate">Update PUS</button>
-      <span style="color:var(--mut);font-size:12px">redeploys this app's own stack (its container restarts) - excluded from regular update runs</span>
+
+    <div class="divider"></div>
+    <h2>System update</h2>
+    <div style="color:var(--mut);font-size:12px">This app's own stack is excluded from regular update runs (redeploying it would stop the update itself). Update it deliberately here - the container restarts and the UI reconnects in a few seconds.</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="btnSelfUpdate">Update P.U.S.</button>
+      <span class="mono" id="selfUpdateResult"></span>
     </div>
+
+    <div class="divider"></div>
+    <h2>Notification</h2>
     <label class="f">Failure notification webhook (optional, e.g. ntfy)</label><input type="url" id="sHook" placeholder="https://ntfy.example/your-topic">
 
     <div class="divider"></div>
