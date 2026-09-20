@@ -490,11 +490,35 @@ def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
         log(f"[ERROR] no docker-compose.yml in {compose_dir} - cannot "
             f"self-update. Check the mount.")
         return False
+    # Resolve the RUNNING Portainer container's compose project and pin it
+    # with -p. Without -p, compose derives the project name from the
+    # DIRECTORY name (/host-portainer -> "host-portainer") - which differs
+    # from the host's real project ("portainer"), so compose treats the
+    # running container as foreign and tries to create a NEW "portainer"
+    # container -> name conflict -> update fails.
+    rc, ps_out = _cli(["ps", "-q", "--filter", "name=^portainer$"])
+    project = "portainer"
+    if rc == 0 and ps_out.strip():
+        cid = ps_out.strip().splitlines()[0]
+        rc2, lbl = _cli(["inspect", "--format",
+                         "{{index .Config.Labels \"com.docker.compose.project\"}}",
+                         cid])
+        if rc2 == 0 and lbl.strip():
+            project = lbl.strip()
+            log(f"[INFO] Using running container's compose project: {project}")
+        else:
+            log(f"[INFO] Running Portainer container has no compose project "
+                f"label - using default '{project}'.")
+    else:
+        log(f"[INFO] No running Portainer container found - using default "
+            f"project '{project}'.")
     try:
-        p = subprocess.run(["docker", "compose", "pull"], capture_output=True,
-                           text=True, errors="replace", timeout=900, cwd=compose_dir)
-        up = subprocess.run(["docker", "compose", "up", "-d"], capture_output=True,
-                            text=True, errors="replace", timeout=900, cwd=compose_dir)
+        p = subprocess.run(["docker", "compose", "-p", project, "pull"],
+                           capture_output=True, text=True, errors="replace",
+                           timeout=900, cwd=compose_dir)
+        up = subprocess.run(["docker", "compose", "-p", project, "up", "-d"],
+                            capture_output=True, text=True, errors="replace",
+                            timeout=900, cwd=compose_dir)
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         log(f"[ERROR] Portainer self-update failed: {e}")
         return False
