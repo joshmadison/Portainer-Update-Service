@@ -113,6 +113,7 @@ class Scheduler:
         from .portainer import Portainer, PortainerError
         import socket
         client = Portainer(get("portainer_url"), get("portainer_api_key"),
+                           endpoint_id=get("portainer_endpoint_id"),
                            tls_verify=bool(get("tls_verify", False)))
         try:
             client.resolve_endpoint(socket.gethostname())

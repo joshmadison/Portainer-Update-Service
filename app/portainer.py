@@ -8,6 +8,11 @@ import json
 from urllib.parse import quote
 
 import requests
+import urllib3
+
+# Self-signed Portainer certs are explicitly supported (tls_verify=false) -
+# suppress the per-request warning noise in the logs.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class PortainerError(RuntimeError):

@@ -47,6 +47,7 @@ def _auth_gate():
 
 def _client() -> Portainer:
     client = Portainer(get("portainer_url"), get("portainer_api_key"),
+                       endpoint_id=get("portainer_endpoint_id"),
                        tls_verify=bool(get("tls_verify", False)))
     client.resolve_endpoint(socket.gethostname())
     return client

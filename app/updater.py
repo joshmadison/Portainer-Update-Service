@@ -215,24 +215,39 @@ def _expected_services(compose_text, env):
 
 def _self_stack_names(client, eid) -> list:
     """Detect the Portainer stack(s) that RUN this service (if any), so the
-    engine can defer them to the very end of an update run. Detection:
-    1. hostname of this container matches a compose project label
-    2. the compose file of that stack contains this image name"""
+    engine can defer them to the very end of an update run.
+
+    Sources:
+    1. explicit config: self_stack_name (recommended when deploying as a
+       Portainer stack - container hostnames don't always match the project)
+    2. hostname heuristic: '<project>-<service>-<idx>' container hostname
+    3. compose-project candidates whose containers mount THIS app's data dir
+    """
     import socket
     names = set()
+
+    explicit = (get("self_stack_name", "") or "").strip().lower()
+    if explicit:
+        names.add(explicit)
+
     try:
         cname = socket.gethostname().lower()
     except Exception:  # noqa: BLE001
-        return []
-    candidates = set()
+        return sorted(names)
+
     try:
-        for c in client.all_containers(eid):
-            lbl = ((c.get("Labels") or {}).get("com.docker.compose.project") or "").lower()
-            if lbl:
-                candidates.add(lbl)
+        cs = client.all_containers(eid)
     except PortainerError:
-        return []
-    # hostname of a compose container is usually '<project>-<service>-<idx>'
+        return sorted(names)
+    candidates = set()
+    for c in cs:
+        lbl = ((c.get("Labels") or {}).get("com.docker.compose.project") or "").lower()
+        if lbl:
+            candidates.add(lbl)
+            # a compose container whose project name starts the hostname
+            if cname and (lbl == cname or cname.startswith(lbl + "-")):
+                names.add(lbl)
+    # container hostname is often '<project>-<service>-<idx>'
     project = cname.split("-")[0] if "-" in cname else ""
     if project and project in candidates:
         names.add(project)
@@ -580,7 +595,9 @@ def run_full_update(runlog) -> bool:
     if not cfg_url or not cfg_key:
         runlog.log("[ERROR] portainer_url / portainer_api_key not configured.")
         return False
-    client = Portainer(cfg_url, cfg_key, tls_verify=bool(get("tls_verify", False)))
+    client = Portainer(cfg_url, cfg_key,
+                       endpoint_id=get("portainer_endpoint_id"),
+                       tls_verify=bool(get("tls_verify", False)))
     import socket
     try:
         eid = client.resolve_endpoint(socket.gethostname())
