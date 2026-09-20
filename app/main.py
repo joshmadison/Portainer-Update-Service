@@ -96,7 +96,7 @@ def healthz():
     }), (200 if not stale else 503)
 
 
-@app.route("/api/test", methods=["POST"])
+@app.route("/api/test", methods=["GET", "POST"])
 def api_test():
     """Settings 'Test connection' button: verify API + resolve endpoint."""
     try:
