@@ -36,16 +36,15 @@ DEFAULTS = {
     "deploy_wait_time": 300,         # seconds to wait for containers to become ready
     "keep_backups": 5,
     "backup_dir": str(DATA_DIR / "backups"),
-    "portainer_compose_dir": "",     # host path to Portainer's own docker-compose.yml
+    "portainer_compose_dir": "",     # container path of Portainer's own compose dir
+                                      # (self-update: compose pull/up in it)
     "check_cache_minutes": 30,       # docker hub result cache TTL
     "listen_host": "127.0.0.1",      # safe default: localhost only
     "listen_port": 8090,
     "auth_token": "",                # if set: mutating API calls need Bearer token
     "notify_webhook": "",            # optional POST target for failure notifications
-    "self_stack_name": "",           # compose project name of THIS app when deployed
-                                     # as a Portainer stack (enables self-update-last)
     "include_portainer": False,      # true = also update Portainer itself
-                                     # (redeploy its stack via the API, LAST step)
+                                      # (compose pull/up in portainer_compose_dir)
     "repairs": {
         "enabled": True,
         # optional user-defined repair rules (see config.example.yaml);
@@ -107,8 +106,7 @@ def validate(key: str, value):
         if v and not re.match(r"^https?://", v):
             raise ConfigError(f"{key} must start with http:// or https://")
         return v
-    if key in ("portainer_api_key", "portainer_compose_dir", "auth_token",
-               "self_stack_name"):
+    if key in ("portainer_api_key", "portainer_compose_dir", "auth_token"):
         return str(value or "").strip()
     if key == "include_portainer":
         if not isinstance(value, bool):

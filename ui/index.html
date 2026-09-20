@@ -146,7 +146,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
   </div>
 
   <section>
-    <div class="spread"><h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks â†’</a></div>
+    <div class="spread"><h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks →</a></div>
     <div class="panel"><table><thead><tr><th>Stack</th><th class="num">Services</th><th>Updates</th><th>Images</th></tr></thead><tbody id="dashStacks"><tr><td colspan=4 class="empty">Loading…</td></tr></tbody></table></div>
   </section>
 </div>
@@ -181,6 +181,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
 <!-- ============================================================ SETTINGS -->
 <div id="tab-settings" style="display:none">
   <div class="panel" style="max-width:640px">
+
     <h2>Connection</h2>
     <label class="f">Portainer URL</label><input type="url" id="sUrl" placeholder="https://portainer:9443">
     <label class="f">API key</label><input type="password" id="sKey" placeholder="ptr_... (leave *** to keep)">
@@ -196,7 +197,8 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     <div id="scanResult" style="display:none;margin-top:8px"></div>
     <label class="f"><input type="checkbox" id="sTls"> Verify TLS certificate</label>
 
-    <h2 style="margin-top:22px">Schedule &amp; deployment</h2>
+    <div class="divider"></div>
+    <h2>Schedule</h2>
     <label class="f">Schedule mode</label>
     <select id="sMode" style="width:100%">
       <option value="interval">Interval (every N hours)</option>
@@ -221,25 +223,29 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
       </select>
     </div>
     <div class="b-sub" style="color:var(--mut);font-size:12px;margin-top:8px">
-      Server time: <span id="sServerTime">–</span> (<span id="sServerTz">–</span>) â€” the schedule refers to this clock.
+      Server time: <span id="sServerTime">–</span> (<span id="sServerTz">–</span>) — the schedule refers to this clock.
     </div>
+    <label class="f">Check cache (minutes)</label><input type="number" id="sCache" min="5" max="720">
+
+    <div class="divider"></div>
+    <h2>Deployment</h2>
     <label class="f">Max parallel deploys</label><input type="number" id="sPar" min="1" max="10">
     <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
     <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
-    <label class="f" style="margin-top:12px">Portainer self-update mode</label>
-    <div style="color:var(--mut);font-size:12px">Portainer is normally <b>not</b> a Portainer stack (it manages the others). Two modes, auto-selected:</div>
-    <div style="margin-top:6px">
-      <label class="f" style="margin:4px 0"><input type="checkbox" id="sIncludePortainer"> <b>Mode A — Portainer runs as a Portainer stack:</b> redeploy it via the Portainer API (needs "Self stack name" below)</label>
-      <label class="f" style="margin:4px 0">Mode B — <b>Portainer compose dir</b> (normal setup): when set below, the app runs <span class="mono">docker compose pull &amp;&amp; up -d</span> in the mounted dir (needs the docker-socket + compose-dir volume mounts in the stack)</label>
-    </div>
-    <label class="f">Self stack name (Mode A only — the Portainer stack's name in Portainer, e.g. portainer — empty = auto-detect)</label>
-    <input type="text" id="sSelfStack" placeholder="only needed for Mode A">
-    <label class="f">Portainer compose dir (Mode B — container path where Portainer's docker-compose.yml is mounted)</label>
+    <label class="f" style="margin-top:14px"><input type="checkbox" id="sIncludePortainer"> <b>Include Portainer updates</b></label>
+    <div style="color:var(--mut);font-size:12px">When checked, every full update run also updates Portainer itself at the end
+      (<span class="mono">docker compose pull &amp;&amp; up -d</span> in its compose dir — Portainer is never a Portainer stack).
+      Requires the compose-dir + docker-socket mounts in this app's stack.</div>
+    <label class="f">Portainer compose dir (container path where Portainer's docker-compose.yml is mounted)</label>
     <input type="text" id="sCompose" placeholder="e.g. /host-portainer (mount: /path/on/host:/host-portainer:ro)">
-    <label class="f">Check cache (minutes)</label><input type="number" id="sCache" min="5" max="720">
+    <div class="row" style="margin-top:8px">
+      <button class="btn sec sm" id="btnMountCheck">Check compose mount</button>
+      <span class="mono" id="mountCheckResult"></span>
+    </div>
     <label class="f">Failure notification webhook (optional, e.g. ntfy)</label><input type="url" id="sHook" placeholder="https://ntfy.example/your-topic">
 
-    <h2 style="margin-top:22px">Network integrity repairs</h2>
+    <div class="divider"></div>
+    <h2>Network integrity repairs</h2>
     <label class="f"><input type="checkbox" id="sRep"> Automatic network integrity repairs</label>
     <div style="color:var(--mut);font-size:12px">Built-in: detects containers whose host-gateway mapping (extra_hosts) went stale after a network prune and recreates their stack. Optional custom repair rules can be defined in config/config.yaml (repairs.rules).</div>
 
@@ -248,8 +254,9 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     </div>
     <p style="color:var(--mut);font-size:12px;margin-top:14px">Settings are persisted to
       <code>config/config.yaml</code> in the mounted config volume and survive container rebuilds.</p>
+
     <div class="divider"></div>
-    <h2>Maintenance</h2>
+    <h2>Clean Up</h2>
     <div class="row">
       <button class="btn danger" id="btnPrune">Clean up unused images now</button>
       <span style="color:var(--mut);font-size:12.5px">removes all unused images &amp; build cache
@@ -678,10 +685,10 @@ async function loadSettings(){
   $('sMode').value=s.update_schedule_mode||'interval';$('sTime').value=s.update_schedule_time||'03:30';
   $('sDay').value=s.update_schedule_day??0;$('sPar').value=s.max_parallel_deploys??3;
   $('sWait').value=s.deploy_wait_time??300;$('sCompose').value=s.portainer_compose_dir||'';
-  $('sSelfStack').value=s.self_stack_name||'';
   $('sIncludePortainer').checked=!!s.include_portainer;
   $('sCache').value=s.check_cache_minutes??30;$('sKeep').value=s.keep_backups??5;
   $('sHook').value=s.notify_webhook||'';$('sRep').checked=!!(s.repairs_enabled??(s.repairs&&s.repairs.enabled));
+  $('mountCheckResult').textContent='';
   toggleScheduleMode();
   // server time + tz
   try{
@@ -727,10 +734,10 @@ $('btnSave').onclick=async()=>{
   const body={portainer_url:$('sUrl').value.trim(),
    max_parallel_deploys:+$('sPar').value||3,deploy_wait_time:+$('sWait').value||300,
    keep_backups:+$('sKeep').value||5,
-   portainer_compose_dir:$('sCompose').value.trim(),check_cache_minutes:+$('sCache').value||30,
-   notify_webhook:$('sHook').value.trim(),self_stack_name:$('sSelfStack').value.trim(),
-   tls_verify:$('sTls').checked,include_portainer:$('sIncludePortainer').checked,
-   repairs_enabled:$('sRep').checked};
+    portainer_compose_dir:$('sCompose').value.trim(),check_cache_minutes:+$('sCache').value||30,
+    notify_webhook:$('sHook').value.trim(),
+    tls_verify:$('sTls').checked,include_portainer:$('sIncludePortainer').checked,
+    repairs_enabled:$('sRep').checked};
   const mode=$('sMode').value;
   body.update_schedule_mode=mode;
   if(mode==='interval')body.update_interval_hours=+$('sInt').value||168;
@@ -749,6 +756,15 @@ $('btnSave').onclick=async()=>{
     toast('Connected. First check started - open Stacks to see per-service status','ok')}catch(e){}
   }
  }catch(e){toast(e.message,'err')}
+};
+$('btnMountCheck').onclick=async()=>{
+ const res=$('mountCheckResult');
+ res.textContent='checking…';
+ try{
+  const r=await api('/api/portainer_mount_check');
+  res.textContent=r.message||String(r.state);
+  res.style.color=r.ok?'var(--ok)':'var(--err)';
+ }catch(e){res.textContent=e.message;res.style.color='var(--err)'}
 };
 $('btnTest').onclick=async()=>{
  $('testResult').textContent='testing…';

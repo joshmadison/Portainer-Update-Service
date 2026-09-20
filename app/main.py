@@ -162,6 +162,44 @@ def api_endpoints():
     ]})
 
 
+@app.route("/api/portainer_mount_check")
+def api_portainer_mount_check():
+    """Settings 'Check mount' button: verify Portainer's compose dir is
+    mounted into this container and contains a docker-compose.yml."""
+    from pathlib import Path
+    compose_dir = (get("portainer_compose_dir", "") or "").strip()
+    if not compose_dir:
+        return jsonify({"ok": False, "state": "not_set",
+                        "message": "No 'Portainer compose dir' set in Settings."})
+    d = Path(compose_dir)
+    if not d.exists():
+        return jsonify({"ok": False, "state": "not_mounted",
+                        "message": f"'{compose_dir}' does not exist inside this "
+                                   "container - the volume mount is missing. "
+                                   "Add it to the stack and redeploy."})
+    yml = d / "docker-compose.yml"
+    if not yml.exists():
+        return jsonify({"ok": False, "state": "no_compose_file",
+                        "message": f"'{compose_dir}' is mounted but contains no "
+                                   "docker-compose.yml - check the mount points "
+                                   "at Portainer's compose dir."})
+    try:
+        content = yml.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        return jsonify({"ok": False, "state": "unreadable",
+                        "message": f"compose file not readable: {e}"})
+    image = ""
+    import re as _re
+    m = _re.search(r"image:\s*([^\s]+)", content)
+    if m:
+        image = m.group(1)
+    return jsonify({"ok": True, "state": "ok", "path": compose_dir,
+                    "image": image,
+                    "message": f"Compose file found in '{compose_dir}'"
+                               + (f" (image: {image})" if image else "")
+                               + " - Portainer self-update will work."})
+
+
 @app.route("/api/history")
 def api_history():
     return jsonify({"history": history.history(),
@@ -462,7 +500,7 @@ def api_settings_post():
                "tls_verify", "max_parallel_deploys",
                "deploy_wait_time", "keep_backups", "portainer_compose_dir",
                "check_cache_minutes", "listen_port", "auth_token",
-               "notify_webhook", "self_stack_name", "include_portainer",
+               "notify_webhook", "include_portainer",
                "repairs_enabled"}
     # two-pass: validate EVERYTHING first, then apply - a bad key must never
     # leave earlier keys mutated in memory (memory/disk divergence)

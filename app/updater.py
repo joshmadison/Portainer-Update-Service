@@ -238,21 +238,15 @@ def _expected_services(compose_text, env):
 
 
 def _self_stack_names(client, eid) -> list:
-    """Detect the Portainer stack(s) that RUN this service (if any), so the
-    engine can defer them to the very end of an update run.
+    """Detect the compose project(s) that RUN this service (if any), so the
+    engine can defer them to the very end of an update run (redeploying the
+    running service itself would kill this process mid-verification).
 
-    Sources:
-    1. explicit config: self_stack_name (recommended when deploying as a
-       Portainer stack - container hostnames don't always match the project)
-    2. hostname heuristic: '<project>-<service>-<idx>' container hostname
-    3. compose-project candidates whose containers mount THIS app's data dir
+    Heuristic: '<project>-<service>-<idx>' container hostname, matched
+    against compose-project candidates whose containers exist.
     """
     import socket
     names = set()
-
-    explicit = (get("self_stack_name", "") or "").strip().lower()
-    if explicit:
-        names.add(explicit)
 
     try:
         cname = socket.gethostname().lower()
@@ -403,11 +397,11 @@ def wait_portainer_ready(client, log, timeout_s=90) -> bool:
 
 
 def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
-    """Mode B: Portainer runs as a plain compose project (NOT a Portainer
-    stack - which is the normal case: Portainer manages the other stacks,
-    it can't be its own client). `docker compose pull && up -d` in the
-    mounted compose dir, docker socket required. Read-only dir mount is
-    sufficient: compose only reads the yml, the daemon does the rest."""
+    """Self-update for Portainer, which runs as a PLAIN compose project
+    (never a Portainer stack - it manages the other stacks, it can't be
+    its own client). `docker compose pull && up -d` in the mounted compose
+    dir, docker socket required. Read-only dir mount is sufficient: compose
+    only reads the yml, the daemon does the rest."""
     log("Portainer self-update: compose-CLI mode (plain compose project)...")
     if not (Path(compose_dir) / "docker-compose.yml").exists():
         log(f"[ERROR] no docker-compose.yml in {compose_dir} - cannot "
@@ -437,70 +431,24 @@ def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
 
 
 def update_portainer(client, eid, log) -> bool:
-    """Update Portainer itself. Two modes, auto-selected:
+    """Update Portainer itself (if include_portainer=true).
 
-    Mode A (include_portainer=true): Portainer runs AS a Portainer stack -
-    redeploy it through the Portainer API (stack_file + update_stack), like
-    any other stack. Called LAST (API may go down mid-redeploy).
-
-    Mode B (portainer_compose_dir set): Portainer runs as a PLAIN compose
-    project OUTSIDE Portainer (Portainer is by definition never a Portainer
-    stack in that setup). Run `docker compose pull && up -d` in the mounted
-    dir via the docker socket. Read-only mount of the compose dir is enough:
-    compose talks to the daemon, it never writes to the compose directory.
+    Portainer is by definition NEVER a Portainer stack (it manages the other
+    stacks, it can't be its own client). Self-update therefore runs
+    `docker compose pull && docker compose up -d` inside Portainer's own
+    compose dir, which must be mounted into this container (read-only is
+    sufficient) along with the docker socket.
     """
-    compose_dir = (get("portainer_compose_dir", "") or "").strip()
-    # Mode selection: compose_dir set = Mode B wins. Portainer-as-stack
-    # (Mode A) is the EXCEPTION - normally Portainer is never a Portainer
-    # stack, so the explicit compose_dir is the stronger signal. Users who
-    # DO deploy Portainer as a stack must leave compose_dir empty.
-    if compose_dir:
-        return _update_portainer_compose_cli(compose_dir, log)
     if not get("include_portainer", False):
         log("[INFO] Portainer self-update disabled (include_portainer=false).")
         return True
-    self_names = _self_stack_names(client, eid)
-    # include_portainer mode: Portainer itself is the named self stack
-    portainer_name = (get("self_stack_name", "") or "").strip().lower()
-    if not portainer_name:
-        portainer_name = "portainer"
-    if self_names and portainer_name not in self_names:
-        log(f"[INFO] '{portainer_name}' is not among detected self stacks "
-            f"({', '.join(self_names)}) - treating it as self stack anyway.")
-    try:
-        stacks = client.stacks()
-    except PortainerError as e:
-        log(f"[ERROR] Could not fetch stacks for Portainer self-update: {e}")
+    compose_dir = (get("portainer_compose_dir", "") or "").strip()
+    if not compose_dir:
+        log("[WARN] include_portainer=true but no portainer_compose_dir set "
+            "- cannot self-update Portainer. Set 'Portainer compose dir' "
+            "in Settings (and mount it read-only into this container).")
         return False
-    stack = next((s for s in stacks
-                  if (s.get("Name") or "").lower() == portainer_name
-                  and s.get("EndpointId") == eid), None)
-    if not stack:
-        log(f"[WARN] Portainer self-update: no stack named '{portainer_name}' "
-            f"on endpoint {eid} - set self_stack_name correctly or disable "
-            f"include_portainer.")
-        return False
-    # intentionally stopped? user intent wins
-    project = _project_name(portainer_name)
-    try:
-        cs = client.containers_by_project(project, eid)
-        if cs and not any(c.get("State") == "running" for c in cs):
-            log(f"[INFO] {portainer_name} fully stopped -> skip self-update (user intent).")
-            return True
-    except PortainerError as e:
-        log(f"[WARN] container check failed ({e}) - continuing.")
-    try:
-        content = client.stack_file(stack["Id"], eid)
-        if not content:
-            log(f"[ERROR] Empty compose file for {portainer_name}.")
-            return False
-        client.update_stack(stack["Id"], eid, content, stack.get("Env") or [])
-    except PortainerError as e:
-        log(f"[ERROR] Portainer self-update failed: {e}")
-        return False
-    log(f"[OK] Portainer self-update triggered (redeploy of '{portainer_name}').")
-    wait_portainer_ready(client, log)
-    return True
+    return _update_portainer_compose_cli(compose_dir, log)
 
 
 # ---------------------------------------------------------- reconciliation
