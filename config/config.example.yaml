@@ -1,0 +1,76 @@
+# Portainer Update Service configuration
+# Copy to config/config.yaml and fill in your values. NEVER commit config.yaml!
+# All of these settings (except repairs) can also be changed in the web UI.
+
+portainer_url: "https://portainer.example.lan:9443"
+portainer_api_key: "ptr_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Leave null to auto-detect this host's endpoint via hostname match
+portainer_endpoint_id: null
+
+# How often checks + full updates run (hours). 168 = weekly
+update_interval_hours: 168
+
+# Verify Portainer TLS certificate (false for self-signed LAN certs)
+tls_verify: false
+
+# Deploy parallelism / wait time for containers to become ready
+max_parallel_deploys: 3
+deploy_wait_time: 300
+
+# Portainer self-update: host path to Portainer's own docker-compose.yml.
+# Empty = self-update skipped.
+portainer_compose_dir: ""
+
+# Registry check result cache (minutes) - respects registry rate limits
+check_cache_minutes: 30
+
+# Web UI bind address. Default 127.0.0.1 = localhost only (safe).
+# Only change to 0.0.0.0 if you front the app with an authenticated
+# reverse proxy or set auth_token below.
+listen_host: "127.0.0.1"
+listen_port: 8090
+
+# Optional API auth: if set, ALL mutating API calls (POST/PUT/DELETE)
+# require "Authorization: Bearer <auth_token>". Recommended when the UI
+# is reachable from other machines.
+auth_token: ""
+
+# Optional failure notifications: POSTs a JSON summary to this URL whenever
+# an update run fails (compatible with ntfy.sh: https://ntfy.sh/your-topic)
+notify_webhook: ""
+
+# Network integrity repairs, run after every full update.
+# Built-in (no config needed): detects containers with a STALE host-gateway
+# mapping - extra_hosts like "host.docker.internal" are resolved at container
+# creation; if the network was recreated since (e.g. by prune), the container
+# keeps dialing an old IP. The repair redeploys the owning compose stack.
+repairs:
+  enabled: true
+
+  # OPTIONAL: user-defined repair rules for setups where a compose-managed
+  # container must reach a container managed by SOMETHING ELSE (e.g. a
+  # reverse proxy fronting an externally-managed app). After a network
+  # prune, the external container can lose its network endpoint.
+  # Each rule:
+  #   name             what it does (log label)
+  #   when_containers  all of these must be running, else rule is skipped
+  #   dns_check        resolve `hostname` from `from_container` via getent;
+  #                    rule applies its fix only if resolution FAILS
+  #   fix              repair actions:
+  #     connect_network + connect_container  -> docker network connect
+  #     restart_containers                   -> docker restart list
+  #
+  # Example (reverse proxy "myproxy" must resolve "myapp", which is managed
+  # by another tool and lives on the shared network "apps-net"):
+  #
+  # rules:
+  #   - name: re-attach myapp to proxy network
+  #     when_containers: [myproxy, myapp]
+  #     dns_check:
+  #       from_container: myproxy
+  #       hostname: myapp
+  #     fix:
+  #       connect_network: apps-net
+  #       connect_container: myapp
+  #       restart_containers: [myproxy]

@@ -1,0 +1,5 @@
+flask>=3.0
+requests>=2.31
+pyyaml>=6.0
+waitress>=3.0
+gunicorn>=21.2 ; sys_platform != "win32"

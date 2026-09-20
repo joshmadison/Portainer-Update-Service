@@ -1,0 +1,35 @@
+# Portainer Update Service - container deployment.
+#
+# Configure via environment variables (PUS_*) - no config.yaml needed:
+#   PUS_PORTAINER_URL      e.g. http://portainer:9000 (or https://:9443)
+#   PUS_PORTAINER_API_KEY  your Portainer API key
+# Or mount ./config/config.yaml instead (then remove the two env vars).
+#
+# The container needs the host docker socket for prune/backup/self-update.
+
+services:
+  update-service:
+    build: .
+    container_name: update-service
+    restart: unless-stopped
+    ports:
+      - "8090:8090"        # inside the container the app binds 0.0.0.0
+    environment:
+      PUS_PORTAINER_URL: "http://portainer:9000"      # adjust to your setup
+      PUS_PORTAINER_API_KEY: "ptr_xxxxxxxxxxxxxxxxxxxx"
+      PUS_LISTEN_HOST: "0.0.0.0"                      # REQUIRED in a container
+      PUS_LISTEN_PORT: "8090"
+      PUS_UPDATE_INTERVAL_HOURS: "168"                # weekly
+      # PUS_AUTH_TOKEN: "change-me"                   # recommended!
+      # PUS_NOTIFY_WEBHOOK: "https://ntfy.sh/your-topic"
+      TZ: "Europe/Berlin"
+    volumes:
+      - update-service-data:/app/data                  # status/history/logs/backups
+      - /var/run/docker.sock:/var/run/docker.sock      # prune/backup/self-update
+    # If you prefer file-based config instead of env vars:
+    # - ./config:/app/config
+    # The service detects the stack that runs it and defers its own redeploy
+    # to the very end of an update run (self-update safe).
+
+volumes:
+  update-service-data:

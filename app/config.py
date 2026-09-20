@@ -1,0 +1,143 @@
+"""Configuration loading/persistence with validation.
+
+config/config.yaml holds credentials + settings (gitignored).
+config/config.example.yaml is the committed template.
+All settings passed via the UI are validated/coerced before being applied,
+and writes are atomic (tmp + replace).
+"""
+import os
+import re
+import threading
+from pathlib import Path
+
+import yaml
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+RUNS_DIR = DATA_DIR / "runs"
+CONFIG_DIR = BASE_DIR / "config"
+CONFIG_FILE = CONFIG_DIR / "config.yaml"
+UI_DIR = BASE_DIR / "ui"
+
+# Container deployments set configuration via env vars (PUS_<KEY>) -
+# they take precedence over config.yaml. See docker-compose.yml.
+ENV_PREFIX = "PUS_"
+
+DEFAULTS = {
+    "portainer_url": "",
+    "portainer_api_key": "",
+    "portainer_endpoint_id": None,   # None = auto-detect via hostname
+    "update_interval_hours": 168,    # weekly
+    "tls_verify": False,             # True = verify Portainer TLS cert
+    "max_parallel_deploys": 3,
+    "deploy_wait_time": 300,         # seconds to wait for containers to become ready
+    "keep_backups": 5,
+    "backup_dir": str(DATA_DIR / "backups"),
+    "portainer_compose_dir": "",     # host path to Portainer's own docker-compose.yml
+    "check_cache_minutes": 30,       # docker hub result cache TTL
+    "listen_host": "127.0.0.1",      # safe default: localhost only
+    "listen_port": 8090,
+    "auth_token": "",                # if set: mutating API calls need Bearer token
+    "notify_webhook": "",            # optional POST target for failure notifications
+    "repairs": {
+        "enabled": True,
+        # optional user-defined repair rules (see config.example.yaml);
+        # the built-in stale host-gateway repair needs no config
+        "rules": [],
+    },
+}
+
+# validation table: key -> (type, min, max) - value ranges for ints
+INT_RANGES = {
+    "update_interval_hours": (1, 8760),
+    "max_parallel_deploys": (1, 10),
+    "deploy_wait_time": (30, 3600),
+    "keep_backups": (1, 100),
+    "check_cache_minutes": (5, 720),
+    "listen_port": (1, 65535),
+    "portainer_endpoint_id": (None, None),
+}
+
+
+class ConfigError(ValueError):
+    pass
+
+
+def validate(key: str, value):
+    """Coerce + validate one setting. Raises ConfigError on garbage."""
+    if key in INT_RANGES:
+        try:
+            v = int(value)
+        except (TypeError, ValueError):
+            raise ConfigError(f"{key} must be an integer (got {value!r})")
+        lo, hi = INT_RANGES[key]
+        if lo is not None and v < lo:
+            raise ConfigError(f"{key} must be >= {lo}")
+        if hi is not None and v > hi:
+            raise ConfigError(f"{key} must be <= {hi}")
+        return v
+    if key == "tls_verify":
+        if not isinstance(value, bool):
+            raise ConfigError("tls_verify must be true/false")
+        return value
+    if key in ("portainer_url", "notify_webhook"):
+        v = str(value or "").strip()
+        if v and not re.match(r"^https?://", v):
+            raise ConfigError(f"{key} must start with http:// or https://")
+        return v
+    if key in ("portainer_api_key", "portainer_compose_dir", "auth_token"):
+        return str(value or "").strip()
+    raise ConfigError(f"unknown setting: {key}")
+
+
+_lock = threading.Lock()
+_cfg = None
+
+
+def load(force: bool = False) -> dict:
+    global _cfg
+    with _lock:
+        if _cfg is not None and not force:
+            return _cfg
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        RUNS_DIR.mkdir(parents=True, exist_ok=True)
+        cfg = dict(DEFAULTS)
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, encoding="utf-8") as f:
+                user = yaml.safe_load(f) or {}
+            cfg.update({k: v for k, v in user.items() if k != "repairs"})
+            cfg["repairs"] = {**DEFAULTS["repairs"], **(user.get("repairs") or {})}
+        # env overrides (container deployments): PUS_PORTAINER_URL, PUS_LISTEN_HOST, ...
+        for key in list(cfg.keys()):
+            if key == "repairs":
+                continue
+            env_val = os.environ.get(ENV_PREFIX + key.upper())
+            if env_val is not None and env_val != "":
+                try:
+                    cfg[key] = yaml.safe_load(env_val)  # coerces true/false/ints/null
+                except yaml.YAMLError:
+                    cfg[key] = env_val
+        _cfg = cfg
+        return cfg
+
+
+def save() -> None:
+    """Atomic write: tmp file + replace."""
+    with _lock:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG_FILE.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            yaml.safe_dump(_cfg, f, sort_keys=False, allow_unicode=True)
+        tmp.replace(CONFIG_FILE)
+
+
+def get(key: str, default=None):
+    return load().get(key, default)
+
+
+def set(key: str, value) -> None:
+    """Validate then set (does NOT save; call save() explicitly)."""
+    load()
+    validated = validate(key, value)
+    with _lock:
+        _cfg[key] = validated
