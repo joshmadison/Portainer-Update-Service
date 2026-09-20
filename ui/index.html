@@ -445,7 +445,6 @@ async function showRunLog(id,live=false){
 }
 
 /* ------------------------------------------------------- dashboard stacks */
-let lastDashHtml=null;
 function renderDashStacks(stacks){
  const tb=$('dashStacks');
  const names=Object.keys(stacks);
@@ -467,7 +466,6 @@ function renderDashStacks(stacks){
 }
 
 /* ----------------------------------------------------------------- stacks */
-let lastStacksHtml=null,stacksLoaded=false;
 async function loadStacks(){
  const tb=$('stackRows');
  if(!stacksLoaded)tb.innerHTML='<tr><td colspan=6 class="empty">Loading…</td></tr>';
