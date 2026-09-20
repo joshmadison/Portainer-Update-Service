@@ -1,9 +1,11 @@
 # Portainer Update Service
 
-A web-based update manager for **Portainer**: it watches your stacks, shows you
-when newer container images are available, updates everything on a schedule or
-at the click of a button — and lets you pin individual services to a specific
-version whenever you want stability over novelty.
+A web-based update manager for **Portainer** — speaking **only** to the
+Portainer API: it watches your stacks, shows you when newer container images
+are available, updates everything on a schedule or at the click of a button —
+and lets you pin individual services to a specific version whenever you want
+stability over novelty. No docker CLI needed inside the container, no docker
+socket scraping.
 
 Everything runs on your own machine. No cloud, no accounts, no telemetry.
 
@@ -77,8 +79,8 @@ cd Portainer-Update-Service
 docker compose up -d --build
 ```
 
-The compose file mounts the host's docker socket so pruning, backups and the
-Portainer self-update work inside the container.
+The app talks exclusively to the Portainer API — the docker socket mount is
+optional (only kept for the docker-CLI fallback path of the network repair).
 
 ### Option C: deploy as a Portainer stack
 
@@ -204,11 +206,10 @@ graph TB
     UI --> APP
     APP --> ENG
     APP --> CHK
-    ENG -->|"Portainer API"| PTA
-    CHK -->|"Portainer API"| PTA
+    ENG -->|"Portainer API (updates, prune, backup)"| PTA
+    CHK -->|"Portainer API (stacks, containers)"| PTA
     CHK -->|"registry API"| REG
     PTA --> MAN
-    ENG -->|"docker CLI"| MAN
 ```
 
 ### What happens during a full update run
