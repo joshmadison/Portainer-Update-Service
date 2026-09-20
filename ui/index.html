@@ -739,7 +739,11 @@ $('btnSave').onclick=async()=>{
 $('btnTest').onclick=async()=>{
  $('testResult').textContent='testing…';
  try{
-  const r=await api('/api/test');
+  const body={portainer_url:$('sUrl').value.trim()};
+  const key=$('sKey').value.trim();
+  if(key&&key!=='***')body.portainer_api_key=key;
+  const r=await api('/api/test',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
   $('testResult').textContent=`OK - Portainer ${r.version} · endpoint ${r.endpoint_id}`;
  }catch(e){$('testResult').textContent='FAILED: '+e.message}
 };

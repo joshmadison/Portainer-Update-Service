@@ -105,7 +105,8 @@ def validate(key: str, value):
         if v and not re.match(r"^https?://", v):
             raise ConfigError(f"{key} must start with http:// or https://")
         return v
-    if key in ("portainer_api_key", "portainer_compose_dir", "auth_token"):
+    if key in ("portainer_api_key", "portainer_compose_dir", "auth_token",
+               "self_stack_name"):
         return str(value or "").strip()
     raise ConfigError(f"unknown setting: {key}")
 
