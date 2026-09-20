@@ -197,6 +197,26 @@ def api_run_log(run_id):
 
 
 # ------------------------------------------------------------------- stacks
+# tiny TTL caches so the 15s UI polling doesn't hammer Portainer with a
+# fresh TCP+TLS session on every tick (data is informational, staleness OK)
+_TTL_STACKS = 10      # seconds - stack list redeploys show up within 10s
+_TTL_INVENTORY = 120  # seconds - dashboard card only
+_stacks_cache: dict = {}    # endpoint_id -> (ts, payload)
+_inventory_cache: dict = {}  # endpoint_id -> (ts, payload)
+
+
+def _cache_get(cache: dict, key, ttl: float):
+    hit = cache.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    return None
+
+
+def _cache_put(cache: dict, key, payload):
+    cache[key] = (time.time(), payload)
+    return payload
+
+
 @app.route("/api/stacks")
 def api_stacks():
     """Cache-only read: NEVER triggers registry calls in the request thread."""
@@ -205,13 +225,22 @@ def api_stacks():
         return e
     eid = client.endpoint_id
     check = checker.get_cached()  # returns snapshot immediately, refreshes in bg
-    stacks = []
-    for s in client.stacks():
-        if s.get("EndpointId") != eid:
-            continue
-        name = s.get("Name")
+    cached = _stacks_cache.get(eid)
+    if cached and time.time() - cached[0] < _TTL_STACKS:
+        stacks = cached[1]
+    else:
+        stacks = []
+        for s in client.stacks():
+            if s.get("EndpointId") != eid:
+                continue
+            stacks.append({"Id": s["Id"], "Name": s.get("Name"),
+                           "EndpointId": eid, "Status": s.get("Status")})
+        _stacks_cache[eid] = (time.time(), stacks)
+    out = []
+    for s in stacks:
+        name = s["Name"]
         svc_check = (check.get("stacks") or {}).get(name, {})
-        stacks.append({
+        out.append({
             "id": s["Id"], "name": name, "status": s.get("Status"),
             "services": svc_check,
             "updates_available": sum(1 for v in svc_check.values()
@@ -220,7 +249,7 @@ def api_stacks():
     return jsonify({"endpoint_id": eid,
                     "checked_at": check.get("checked_at"),
                     "check_running": bool(check.get("running")),
-                    "stacks": stacks})
+                    "stacks": out})
 
 
 @app.route("/api/stacks/<int:stack_id>")
@@ -317,6 +346,9 @@ def api_versions():
 # ------------------------------------------------------------------- actions
 @app.route("/api/check", methods=["POST"])
 def api_check():
+    """Fire-and-forget update check. The gate is held for the DURATION of
+    the check (released in the worker thread), so a full update can't start
+    mid-check."""
     if not gate.try_acquire("check"):
         return _err("another job is running - see /api/runs/current", 409)
     try:
@@ -325,18 +357,25 @@ def api_check():
         except PortainerError as e:
             return _err(str(e), 502)
         force = bool((request.get_json(silent=True) or {}).get("force"))
-        threading.Thread(target=_check_worker, args=(client, client.endpoint_id, force),
-                         daemon=True).start()
+        started = threading.Thread(
+            target=_check_worker, args=(client, client.endpoint_id, force),
+            daemon=True)
+        started.start()
         return jsonify({"ok": True, "started": True})
-    finally:
+    except Exception as e:  # noqa: BLE001 - spawn failure must release the gate
         gate.release()
+        return _err(f"could not start check: {e}", 500)
 
 
 def _check_worker(client, eid, force):
+    """Runs OUTSIDE the request context - releases the gate when done."""
     try:
         checker.run_check(client, eid, force=force)
+    except Exception as e:  # noqa: BLE001 - defensive: check must never crash silently
+        import sys
+        print(f"[check] worker crashed: {e}", file=sys.stderr, flush=True)
     finally:
-        pass  # gate already released by api_check (check is fire-and-forget)
+        gate.release()
 
 
 @app.route("/api/update", methods=["POST"])
@@ -350,11 +389,14 @@ def api_update():
 @app.route("/api/inventory")
 def api_inventory():
     """Docker inventory for the dashboard: unused images (reclaimable),
-    unused networks, totals. Read-only, computed live (cheap list calls)."""
+    unused networks, totals. Read-only, TTL-cached (120s)."""
     client, e = _client_or_error()
     if e:
         return e
     eid = client.endpoint_id
+    cached = _inventory_cache.get(eid)
+    if cached and time.time() - cached[0] < _TTL_INVENTORY:
+        return jsonify(cached[1])
     try:
         imgs = client.images(eid)
         cs = client.all_containers(eid)
@@ -369,14 +411,16 @@ def api_inventory():
         for nid in ((c.get("NetworkSettings", {}) or {}).get("Networks") or {}):
             containers_per_net[nid] = containers_per_net.get(nid, 0) + 1
     unused_nets = [n for n in nets if containers_per_net.get(n.get("Id"), 0) == 0]
-    return jsonify({
+    payload = {
         "images_total": len(imgs),
         "images_unused": len(unused),
         "images_unused_mb": unused_mb,
         "networks_total": len(nets),
         "networks_unused": len(unused_nets),
         "containers_total": len(cs),
-    })
+    }
+    _inventory_cache[eid] = (time.time(), payload)
+    return jsonify(payload)
 
 
 @app.route("/api/prune", methods=["POST"])

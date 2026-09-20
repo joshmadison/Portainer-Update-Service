@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#0f141a">
 <title>Portainer Update Service</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230f141a'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%233aa0ff'/%3E%3C/svg%3E">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#0f141a;--panel:#161d26;--panel2:#1c242f;--line:#2a3441;--line-strong:#3a4656;
@@ -82,7 +81,6 @@ pre.log{background:#0b0f14;border:1px solid var(--line);border-radius:var(--radi
 select,input[type=text],input[type=password],input[type=number],input[type=url]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 10px;border-radius:7px;font-size:13.5px}
 label.f{display:block;color:var(--mut);font-size:12px;margin:12px 0 4px}
 input[type=text],input[type=password],input[type=number],input[type=url]{width:100%}
-.chart-box{position:relative;height:220px}
 .mono{font:12px ui-monospace,Consolas,monospace;color:var(--mut)}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--acc);padding:12px 16px;border-radius:8px;display:none;z-index:20;max-width:380px;animation:tin .18s ease}
 .toast.ok{border-left-color:var(--ok)}.toast.err{border-left-color:var(--err)}
@@ -150,11 +148,6 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     <div class="spread"><h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks â†’</a></div>
     <div class="panel"><table><thead><tr><th>Stack</th><th class="num">Services</th><th>Updates</th><th>Images</th></tr></thead><tbody id="dashStacks"><tr><td colspan=4 class="empty">Loading…</td></tr></tbody></table></div>
   </section>
-
-  <section>
-    <h2>Run duration &amp; outcome (last 20)</h2>
-    <div class="panel chart-box"><canvas id="chRuns"></canvas></div>
-  </section>
 </div>
 
 <!-- =============================================================== STACKS -->
@@ -176,10 +169,6 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     <div class="card"><div class="lbl">Success rate</div><div class="val" id="hRate">–</div><div class="sub">last 200 runs</div></div>
     <div class="card"><div class="lbl">Avg duration</div><div class="val" id="hDur">–</div><div class="sub">full updates</div></div>
   </div>
-  <section>
-    <h2>Run duration &amp; outcome</h2>
-    <div class="panel chart-box"><canvas id="chHist"></canvas></div>
-  </section>
   <section>
     <h2>Run log</h2>
     <div class="panel"><table><thead><tr><th>Run</th><th>Kind</th><th>Trigger</th><th>When</th><th class="num">Duration</th><th>Result</th><th></th></tr></thead>
@@ -285,7 +274,6 @@ const ago=s=>{if(!s)return'–';const d=Math.floor(Date.now()/1000-s);
  if(d<60)return d+'s ago';if(d<3600)return Math.floor(d/60)+'m ago';
  if(d<86400)return Math.floor(d/3600)+'h ago';return Math.floor(d/86400)+'d ago'};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let charts={};
 let lastFailedRun=null;
 
 /* ---------------------------------------------------------------- auth */
@@ -322,9 +310,13 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>showTab(b.datas
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
 /* ------------------------------------------------------------ status poll */
+let lastDashHtml=null,lastStacksHtml=null;
 async function refresh(){
  try{
-  const s=await api('/api/status');
+  const [s,inv,hh]=await Promise.all([
+   api('/api/status'),
+   api('/api/inventory').catch(()=>null),
+   api('/api/history').catch(()=>null)]);
   const dot=$('hdrDot');
   const busy=s.scheduler&&s.scheduler.busy;
   dot.className='dot '+(busy?'run':s.state==='success'?'ok':s.state==='failed'?'err':'');
@@ -336,7 +328,7 @@ async function refresh(){
   // setup banner
   $('setupBanner').classList.toggle('open',!s.configured);
   // run banner: poll fast while busy
-  if(busy){await refreshRunBanner(s)}
+  if(busy){await refreshRunBanner()}
   else{$('runBanner').classList.remove('open');stopLiveLog()}
   $('cUpd').textContent=s.check&&s.check.checked_at!=null?s.check.updates_available:'–';
   $('cUpdSub').textContent=s.check&&s.check.checked_at?('checked '+ago(s.check.checked_at)):'no check yet';
@@ -366,24 +358,18 @@ async function refresh(){
     $('cNextSub').textContent+=' · '+s.scheduler.consecutive_failures+' failures (backoff)';
    }
   }
-  // inventory card
-  if(s.inventory){
-   $('cInv').textContent=s.inventory.images_unused+' ('+s.inventory.images_unused_mb+' MB)';
-   $('cInvSub').textContent='of '+s.inventory.images_total+' images · '+s.inventory.networks_unused+' unused networks';
-  }
+  // inventory card (s.inventory from status if present, else live fetch)
+  const iv=s.inventory||inv;
+  if(iv){
+   $('cInv').textContent=iv.images_unused+' ('+iv.images_unused_mb+' MB)';
+   $('cInvSub').textContent='of '+iv.images_total+' images · '+iv.networks_unused+' unused networks';
+  }else{$('cInv').textContent='–';$('cInvSub').textContent='unavailable'}
   $('cRuns').textContent=s.runs_total??'–';
-  // inventory + reclaim cards (live)
-  try{
-   const inv=await api('/api/inventory');
-   $('cInv').textContent=inv.images_unused+' ('+inv.images_unused_mb+' MB)';
-   $('cInvSub').textContent='of '+inv.images_total+' images · '+inv.networks_unused+' unused networks';
-  }catch(_){$('cInv').textContent='–';$('cInvSub').textContent='unavailable'}
-  try{
-   const hh=await api('/api/history');
-   const ps=hh.prune_stats_30d||{};
-   $('cReclaim').textContent=(ps.reclaimed_mb_30d||0)+' MB';
-   $('cReclaimSub').textContent='in '+(ps.prune_runs_30d||0)+' prunes · '+(ps.images_deleted_30d||0)+' images';
-  }catch(_){$('cReclaim').textContent='–';$('cReclaimSub').textContent='unavailable'}
+  // reclaimed card from history stats
+  const ps=(hh&&hh.prune_stats_30d)||null;
+  if(ps){$('cReclaim').textContent=(ps.reclaimed_mb_30d||0)+' MB';
+   $('cReclaimSub').textContent='in '+(ps.prune_runs_30d||0)+' prunes · '+(ps.images_deleted_30d||0)+' images'}
+  else{$('cReclaim').textContent='–';$('cReclaimSub').textContent='unavailable'}
   $('cRunsSub').textContent='all time';
   if(currentTab()==='dash')renderDashStacks(s.stacks||{});
   gateBusyFlag=!!busy;
@@ -396,35 +382,37 @@ function currentTab(){return document.querySelector('nav button.active').dataset
 const PHASES={preflight:'pre-flight checks',backup:'Portainer backup',prune:'docker prune',
  redeploy_stacks:'redeploying stacks',reconciliation_sweep:'verification sweep',
  post_deployment_repairs:'post-deploy repairs',update_portainer:'Portainer self-update',
- docker_prune:'docker prune',pin_version:'version pin'};
+ docker_prune:'docker prune',pin_version:'version pin',update:'Full update',
+ check:'Update check',redeploy:'Stack redeploy'};
 let bannerTimer=null;
 
-async function refreshRunBanner(s){
+async function refreshRunBanner(){
  try{
   const c=await api('/api/runs/current');
-  if(!c.active){$('runBanner').classList.remove('open');stopLiveLog();return}
+  if(!c.active){$('runBanner').classList.remove('open');stopLiveLog();return false}
   $('runBanner').classList.add('open');
   const steps=c.steps||[];
   const okN=steps.filter(x=>x.ok).length;
-  const lastStep=steps.length?steps[steps.length-1].name:'starting';
   $('rbTitle').textContent=(PHASES[c.holder]||c.holder||'job')+' running…';
-  const tail=(c.log_tail||[]).slice(-2).join('').trim();
-  $('rbSub').textContent=(steps.length?`step ${esc(lastStep)} · ${okN}/${steps.length} done · `:'')+
+  const tail=(c.log_tail||[]).slice(-3).join('').trim()||'starting…';
+  $('rbSub').textContent=(steps.length?`${okN}/${steps.length} steps done · `:'')+
    Math.round((Date.now()/1000-c.since)/60*10)/10+' min elapsed';
   $('rbTail').textContent=tail;
+  $('rbLogBtn').style.display=c.run_id?'':'none';
   $('rbLogBtn').onclick=()=>showRunLog(c.run_id,true);
- }catch(e){}
+  return true;
+ }catch(e){return false}
 }
 /* dedicated fast poll while a job runs (banner feels live) */
 function ensureBannerTimer(){
  if(bannerTimer)return;
  bannerTimer=setInterval(async()=>{
-  if(!$('runBanner').classList.contains('open')&&!gateBusyFlag){clearInterval(bannerTimer);bannerTimer=null;return}
-  try{const s=await api('/api/status');
-   if(s.scheduler&&s.scheduler.busy)await refreshRunBanner(s);
-   else{$('runBanner').classList.remove('open');stopLiveLog();clearInterval(bannerTimer);bannerTimer=null}}
+  try{const c=await api('/api/runs/current');
+   if(c.active){await refreshRunBanner()}
+   else{$('runBanner').classList.remove('open');stopLiveLog();clearInterval(bannerTimer);bannerTimer=null;
+    setBusyUI(false);refresh()}}
   catch(e){}
- },3000);
+ },2000);
 }
 let gateBusyFlag=false;
 
@@ -457,77 +445,60 @@ async function showRunLog(id,live=false){
 }
 
 /* ------------------------------------------------------- dashboard stacks */
+let lastDashHtml=null;
 function renderDashStacks(stacks){
  const tb=$('dashStacks');
  const names=Object.keys(stacks);
- if(!names.length){tb.innerHTML='<tr><td colspan=4 class="empty">No check data yet - run "Check updates".</td></tr>';return}
- tb.innerHTML='';
- names.sort().forEach(n=>{
-  const svcs=stacks[n],imgs=Object.values(svcs);
-  const upd=imgs.filter(v=>v.update_available).length;
-  const badge=upd?`<span class="badge b-warn">${upd} update${upd>1?'s':''}</span>`:'<span class="badge b-ok">up to date</span>';
-  const tr=document.createElement('tr');
-  tr.style.cursor='pointer';
-  tr.onclick=()=>openStack(n);
-  tr.innerHTML=`<td><b>${esc(n)}</b></td><td class="num">${imgs.length}</td><td>${badge}</td><td class="mono" title="${esc(imgs.map(i=>i.image).join(', '))}">${esc(imgs.map(i=>i.image).slice(0,2).join(', '))}</td>`;
-  tb.appendChild(tr);
- });
-}
-
-/* --------------------------------------------------------------- runs chart */
-const chartTooltip={backgroundColor:'#1c242f',borderColor:'#2a3441',borderWidth:1,
- titleColor:'#d7e0ea',bodyColor:'#b9c6d4',padding:10,cornerRadius:8,displayColors:false};
-const chartTicks={color:'#8a97a8'};
-function fmtDur(v){return v>=60?(Math.round(v/6)/10)+'m':Math.round(v)+'s'}
-
-async function renderRunChart(){
- try{
-  const hr=await api('/api/history');
-  const h=hr.history||[];
-  if(!h.length)return;
-  const last=h.slice(-20);
-  const labels=last.map(r=>new Date(r.finished*1000).toLocaleDateString());
-  const data=last.map(r=>r.duration_s||0);
-  const colors=last.map(r=>r.success?'rgba(56,193,114,.7)':'rgba(227,93,93,.7)');
-  const borders=last.map(r=>r.success?'rgba(56,193,114,1)':'rgba(227,93,93,1)');
-  if(charts.runs){charts.runs.data.labels=labels;charts.runs.data.datasets[0].data=data;
-   charts.runs.data.datasets[0].backgroundColor=colors;
-   charts.runs.data.datasets[0].borderColor=borders;charts.runs.update();return}
-  charts.runs=new Chart($('chRuns'),{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderColor:borders,borderWidth:2,borderRadius:4}]},
-   options:{plugins:{legend:{display:false},tooltip:{...chartTooltip,callbacks:{label:c=>fmtDur(c.parsed.y)}}},
-   scales:{y:{beginAtZero:true,grid:{color:'#2a3441'},ticks:{...chartTicks,callback:v=>fmtDur(v)}},
-   x:{grid:{display:false},ticks:{...chartTicks,maxRotation:0,maxTicksLimit:8}}}}});
- }catch(e){}
+ let html;
+ if(!names.length)html='<tr><td colspan=4 class="empty">No check data yet - run "Check updates".</td></tr>';
+ else{
+  const rows=names.sort().map(n=>{
+   const svcs=stacks[n],imgs=Object.values(svcs);
+   const upd=imgs.filter(v=>v.update_available).length;
+   const badge=upd?`<span class="badge b-warn">${upd} update${upd>1?'s':''}</span>`:'<span class="badge b-ok">up to date</span>';
+   return `<tr style="cursor:pointer" data-st="${esc(n)}"><td><b>${esc(n)}</b></td><td class="num">${imgs.length}</td><td>${badge}</td><td class="mono" title="${esc(imgs.map(i=>i.image).join(', '))}">${esc(imgs.map(i=>i.image).slice(0,2).join(', '))}</td></tr>`;
+  }).join('');
+  html=rows;
+ }
+ if(html===lastDashHtml)return; // unchanged - zero DOM churn, no flicker
+ lastDashHtml=html;
+ tb.innerHTML=html;
+ tb.querySelectorAll('tr[data-st]').forEach(tr=>{tr.onclick=()=>openStack(tr.dataset.st)});
 }
 
 /* ----------------------------------------------------------------- stacks */
+let lastStacksHtml=null,stacksLoaded=false;
 async function loadStacks(){
  const tb=$('stackRows');
- tb.innerHTML='<tr><td colspan=6 class="empty">Loading…</td></tr>';
+ if(!stacksLoaded)tb.innerHTML='<tr><td colspan=6 class="empty">Loading…</td></tr>';
  try{
   const s=await api('/api/stacks');
   $('stackCheckInfo').textContent=s.checked_at?('checked '+ago(s.checked_at)):'no check data yet';
-  if(!s.stacks.length){tb.innerHTML='<tr><td colspan=6 class="empty">No stacks found - check Settings.</td></tr>';return}
-  tb.innerHTML='';
-  s.stacks.forEach(st=>{
-   const svcs=Object.entries(st.services||{});
-   if(!svcs.length){tb.insertAdjacentHTML('beforeend',
-    `<tr><td><b>${esc(st.name)}</b></td><td colspan=4 class="empty">no images / no check data</td>
-     <td><button class="btn sm sec" data-st="${st.id}" data-nm="${esc(st.name)}" data-act="redeploy">Update</button></td></tr>`);return}
-   const updN=Object.values(st.services).filter(v=>v.update_available).length;
-   svcs.forEach(([svc,v],i)=>{
-    const badge=v.update_available?`<span class="badge b-warn" title="available for ${v.lag_days??0} days">update: ${esc(v.latest_tag||'digest')}</span>`
-      :v.note?'<span class="badge b-mut" title="'+esc(v.note)+'">not verified</span>':'<span class="badge b-ok">current</span>';
-    const mode=v.mode==='digest'?'latest (digest)':v.mode==='semver'?'pinned (version)':
-               v.mode==='pinned-digest'?'digest-pinned':'unknown';
-    tb.insertAdjacentHTML('beforeend',`<tr>
-     ${i===0?`<td rowspan="${svcs.length}"><b>${esc(st.name)}</b>${updN?` <span class="badge b-warn">${updN}</span>`:''}<br>
-       <a href="#" data-nm="${esc(st.name)}" data-act="open">manage</a></td>`:''}
-     <td>${esc(svc)}</td><td class="mono" title="${esc(v.image)}">${esc(v.image)}</td>
-     <td><span class="badge b-mut" title="${esc(v.note||'')}">${mode}</span></td><td>${badge}</td>
-     <td><button class="btn sm sec" data-id="${st.id}" data-svc="${esc(svc)}" data-act="pin">Version</button></td></tr>`);
+  let html;
+  if(!s.stacks.length)html='<tr><td colspan=6 class="empty">No stacks found - check Settings.</td></tr>';
+  else{
+   html='';
+   s.stacks.forEach(st=>{
+    const svcs=Object.entries(st.services||{});
+    if(!svcs.length){html+=`<tr><td><b>${esc(st.name)}</b></td><td colspan=4 class="empty">no images / no check data</td>
+     <td><button class="btn sm sec" data-st="${st.id}" data-nm="${esc(st.name)}" data-act="redeploy">Update</button></td></tr>`;return}
+    const updN=Object.values(st.services).filter(v=>v.update_available).length;
+    svcs.forEach(([svc,v],i)=>{
+     const badge=v.update_available?`<span class="badge b-warn" title="available for ${v.lag_days??0} days">update: ${esc(v.latest_tag||'digest')}</span>`
+       :v.note?'<span class="badge b-mut" title="'+esc(v.note)+'">not verified</span>':'<span class="badge b-ok">current</span>';
+     const mode=v.mode==='digest'?'latest (digest)':v.mode==='semver'?'pinned (version)':
+                v.mode==='pinned-digest'?'digest-pinned':'unknown';
+     html+=`<tr>
+      ${i===0?`<td rowspan="${svcs.length}"><b>${esc(st.name)}</b>${updN?` <span class="badge b-warn">${updN}</span>`:''}<br>
+        <a href="#" data-nm="${esc(st.name)}" data-act="open">manage</a></td>`:''}
+      <td>${esc(svc)}</td><td class="mono" title="${esc(v.image)}">${esc(v.image)}</td>
+      <td><span class="badge b-mut" title="${esc(v.note||'')}">${mode}</span></td><td>${badge}</td>
+      <td><button class="btn sm sec" data-id="${st.id}" data-svc="${esc(svc)}" data-act="pin">Version</button></td></tr>`;
+    });
    });
-  });
+  }
+  if(html!==lastStacksHtml){lastStacksHtml=html;tb.innerHTML=html} // diff-render: no flicker
+  stacksLoaded=true;
  }catch(e){tb.innerHTML=`<tr><td colspan=6 class="empty">${esc(e.message)}</td></tr>`}
 }
 
@@ -657,20 +628,6 @@ async function loadHistory(){
     tb.appendChild(tr);
    });
   }
-  const last=h.slice(-30);
-  if(last.length){
-   const labels=last.map(r=>new Date(r.finished*1000).toLocaleString());
-   const data=last.map(r=>r.duration_s||0);
-   const colors=last.map(r=>r.success?'rgba(56,193,114,.7)':'rgba(227,93,93,.7)');
-   const borders=last.map(r=>r.success?'rgba(56,193,114,1)':'rgba(227,93,93,1)');
-   if(charts.hist){charts.hist.data.labels=labels;charts.hist.data.datasets[0].data=data;
-    charts.hist.data.datasets[0].backgroundColor=colors;
-    charts.hist.data.datasets[0].borderColor=borders;charts.hist.update()}
-   else charts.hist=new Chart($('chHist'),{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderColor:borders,borderWidth:2,borderRadius:4}]},
-    options:{plugins:{legend:{display:false},tooltip:{...chartTooltip,callbacks:{label:c=>fmtDur(c.parsed.y)}}},
-    scales:{y:{beginAtZero:true,grid:{color:'#2a3441'},ticks:{...chartTicks,callback:v=>fmtDur(v)}},
-    x:{grid:{display:false},ticks:{...chartTicks,maxRotation:0,maxTicksLimit:8}}}}});
-  }
  }catch(e){tb.innerHTML=`<tr><td colspan=7 class="empty">${esc(e.message)}</td></tr>`}
 }
 $('cInvCard').onclick=()=>showTab('stacks');
@@ -769,7 +726,9 @@ $('btnTest').onclick=async()=>{
 };
 $('btnPrune').onclick=async()=>{
  if(!confirm('Docker prune deletes ALL unused images and build cache.\n\nRollback to previous image versions becomes impossible and re-pulling will take time.\n\nContinue?'))return;
- try{const r=await api('/api/prune',{method:'POST'});toast('Prune started - run '+r.run_id,'ok')}
+ try{const r=await api('/api/prune',{method:'POST'});
+  toast('Prune started - run '+r.run_id,'ok');gateBusyFlag=true;
+  setBusyUI(true);ensureBannerTimer();await refreshRunBanner()}
  catch(e){toast(e.message,'err')}
 };
 
@@ -779,13 +738,18 @@ function setBusyUI(busy){
  $('btnRecheck').disabled=busy;
 }
 $('btnCheck').onclick=async()=>{
- try{await api('/api/check',{method:'POST',body:JSON.stringify({force:true})});toast('Update check started','ok')}
+ try{await api('/api/check',{method:'POST',body:JSON.stringify({force:true})});
+  toast('Update check started','ok');ensureBannerTimer();setBusyUI(true);
+  gateBusyFlag=true;await refreshRunBanner()}
  catch(e){toast(e.message,'err')}
 };
 $('btnRecheck').onclick=()=>$('btnCheck').onclick();
 $('btnUpdate').onclick=async()=>{
  if(!confirm('Run full update now?\n\n- backs up Portainer data\n- prunes unused images + build cache\n- redeploys ALL stacks\n- updates Portainer itself\n\nThis takes several minutes.'))return;
- try{const r=await api('/api/update',{method:'POST'});toast('Full update started - run '+r.run_id,'ok')}
+ try{const r=await api('/api/update',{method:'POST'});
+  toast('Full update started - run '+r.run_id,'ok',true);
+  gateBusyFlag=true;setBusyUI(true);ensureBannerTimer();await refreshRunBanner();
+  showTab('dash')}
  catch(e){toast(e.message,'err')}
 };
 
