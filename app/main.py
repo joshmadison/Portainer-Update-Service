@@ -383,7 +383,7 @@ def api_settings_post():
                "tls_verify", "max_parallel_deploys",
                "deploy_wait_time", "keep_backups", "portainer_compose_dir",
                "check_cache_minutes", "listen_port", "auth_token",
-               "notify_webhook"}
+               "notify_webhook", "self_stack_name"}
     # two-pass: validate EVERYTHING first, then apply - a bad key must never
     # leave earlier keys mutated in memory (memory/disk divergence)
     from .config import validate
