@@ -42,9 +42,10 @@ def _save_lag(state: dict) -> None:
 def collect_images(client: Portainer, eid, log=None) -> list:
     """Every (stack, service, image) triple deployed on this endpoint."""
     out = []
-    for stack in client.stacks():
-        if stack.get("EndpointId") != eid:
-            continue
+    stacks = [s for s in client.stacks() if s.get("EndpointId") == eid]
+    if log:
+        log(f"[INFO] reading {len(stacks)} stack compose files…")
+    for stack in stacks:
         sid = stack["Id"]
         name = stack.get("Name", f"stack-{sid}")
         try:
@@ -59,6 +60,8 @@ def collect_images(client: Portainer, eid, log=None) -> list:
                 "service": svc, "image": image,
                 "env": stack.get("Env") or [],
             })
+    if log:
+        log(f"[INFO] found {len(out)} service image(s) across {len(stacks)} stack(s)")
     return out
 
 
@@ -112,7 +115,11 @@ def run_check(client: Portainer, eid, force=False, log=None) -> dict:
     try:
         started = time.time()
         items = collect_images(client, eid, log)
+        if log:
+            log(f"[INFO] fetching local image digests from Docker…")
         digests = local_digests(client, eid)
+        if log:
+            log(f"[INFO] checking {len(items)} image(s) against DockerHub…")
         lag = _load_lag()
 
         stacks_result: dict = {}

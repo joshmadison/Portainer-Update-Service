@@ -126,6 +126,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
 <div class="banner" id="runBanner">
   <div class="b-txt"><b id="rbTitle">Update running…</b>
     <div class="b-sub" id="rbSub"></div>
+    <div class="b-sub" id="rbActivity" style="color:var(--acc);font-size:12.5px;margin-top:2px"></div>
     <pre class="log" id="rbTail" style="max-height:52px;margin-top:6px;font-size:11px"></pre></div>
   <button class="btn sec sm" onclick="showTab('history')">History</button>
   <button class="btn sec sm" id="rbLogBtn">Live log</button>
@@ -381,9 +382,26 @@ function currentTab(){return document.querySelector('nav button.active').dataset
 /* ----------------------------------------------------------- run banner */
 const PHASES={preflight:'pre-flight checks',backup:'Portainer backup',prune:'docker prune',
  redeploy_stacks:'redeploying stacks',reconciliation_sweep:'verification sweep',
- post_deployment_repairs:'post-deploy repairs',update_portainer:'Portainer self-update',
+ post_deployment_repairs:'post-deployment repairs',update_portainer:'Portainer self-update',
  docker_prune:'docker prune',pin_version:'version pin',update:'Full update',
  check:'Update check',redeploy:'Stack redeploy'};
+/* translate raw log lines into a friendly ongoing-activity line */
+function activityLine(tail){
+ const lines=(tail||[]).join('').split('\n').map(s=>s.trim()).filter(Boolean);
+ for(let i=lines.length-1;i>=0;i--){
+  const l=lines[i];
+  let m;
+  if((m=l.match(/\[INFO\] (.+)$/)))return m[1];
+  if((m=l.match(/\[OK\] (.+)$/)))return m[1].length>70?m[1].slice(0,77)+'…':m[1];
+  if((m=l.match(/\[WARN\] (.+)$/)))return m[1];
+  if((m=l.match(/\[ERROR\] (.+)$/)))return '⚠ '+m[1];
+  if((m=l.match(/Found (\d+) stacks\. Deploying (\d+) now/)))
+   return `redeploying ${m[2]} stacks…`;
+  if((m=l.match(/Pulling image (.+?) for/)))return `pulling ${m[1]}…`;
+  if((m=l.match(/Checking (\d+) stacks/)))return `checking ${m[1]} stacks against DockerHub…`;
+ }
+ return 'working…';
+}
 let bannerTimer=null;
 
 async function refreshRunBanner(){
@@ -394,10 +412,12 @@ async function refreshRunBanner(){
   const steps=c.steps||[];
   const okN=steps.filter(x=>x.ok).length;
   $('rbTitle').textContent=(PHASES[c.holder]||c.holder||'job')+' running…';
-  const tail=(c.log_tail||[]).slice(-3).join('').trim()||'starting…';
+  const tail=(c.log_tail||[]);
+  const joined=tail.join('');
   $('rbSub').textContent=(steps.length?`${okN}/${steps.length} steps done · `:'')+
    Math.round((Date.now()/1000-c.since)/60*10)/10+' min elapsed';
-  $('rbTail').textContent=tail;
+  $('rbActivity').textContent=activityLine(tail);
+  $('rbTail').textContent=joined.trim()?tail.slice(-3).join('').trim():'starting…';
   $('rbLogBtn').style.display=c.run_id?'':'none';
   $('rbLogBtn').onclick=()=>showRunLog(c.run_id,true);
   return true;
@@ -466,6 +486,7 @@ function renderDashStacks(stacks){
 }
 
 /* ----------------------------------------------------------------- stacks */
+let stacksLoaded=false;
 async function loadStacks(){
  const tb=$('stackRows');
  if(!stacksLoaded)tb.innerHTML='<tr><td colspan=6 class="empty">Loading…</td></tr>';
