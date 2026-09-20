@@ -60,9 +60,14 @@ def _project_name(stack_name):
     return (stack_name or "").lower()
 
 
-def _containers_ready(client, project, eid, log=None):
+def _containers_ready(client, project, eid, log=None, created_after=None):
     """Port of count_ready_containers(): 'ready|total'. Ready = healthy/running
-    without healthcheck, or exited 0."""
+    without healthcheck, or exited 0.
+
+    created_after: unix ts. When set, only containers CREATED after this
+    timestamp count - this distinguishes a REAL redeploy (new containers)
+    from the old, still-running set (which made the wait loop pass in <1s
+    while the actual pull/deploy was still running)."""
     try:
         cs = client.containers_by_project(project, eid)
     except PortainerError as e:
@@ -71,6 +76,8 @@ def _containers_ready(client, project, eid, log=None):
         return 0, 0
     ready = total = 0
     for c in cs:
+        if created_after is not None and (c.get("Created") or 0) <= created_after:
+            continue  # old container from before the redeploy
         total += 1
         state = c.get("State", "")
         status = c.get("Status", "")
@@ -124,10 +131,15 @@ def preflight_checks(client: Portainer, log) -> tuple:
     compose_dir = get("portainer_compose_dir", "")
     if compose_dir:
         from pathlib import Path
-        if (Path(compose_dir) / "docker-compose.yml").exists():
+        if not Path(compose_dir).exists():
+            log(f"[WARN] portainer_compose_dir is set but NOT MOUNTED into "
+                f"the container: {compose_dir} does not exist here. Add the "
+                f"volume mount to the stack and update it.")
+        elif (Path(compose_dir) / "docker-compose.yml").exists():
             log("[OK] Portainer compose file found")
         else:
-            log(f"[WARN] Portainer compose file not found in {compose_dir} - self-update will be skipped")
+            log(f"[WARN] no docker-compose.yml in {compose_dir} - check the "
+                f"mount points at Portainer's compose dir")
     return ok, []
 
 
@@ -302,17 +314,27 @@ def redeploy_single_stack(client, stack, eid, log) -> bool:
         log(f"[ERROR] Failed to redeploy {name}: {e}")
         return False
 
+    # Only containers created AFTER this moment count as "the redeploy's"
+    # containers - the old set would otherwise satisfy the wait instantly
+    # (that made runs look "done" in 1s while the pull was still going).
+    redeploy_started = time.time()
     log(f"[INFO] {name}: HTTP 200, verifying containers...")
     deadline = time.time() + int(get("deploy_wait_time", 300))
     interval = 5
     expected = n_services
+    last_report = 0.0
     while time.time() < deadline:
-        ready, total = _containers_ready(client, project, eid, log)
+        ready, total = _containers_ready(client, project, eid, log,
+                                         created_after=redeploy_started)
         if ready >= expected and ready > 0:
             log(f"[OK] {name}: all {expected} services ready.")
             return True
+        if log and time.time() - last_report >= 30:
+            last_report = time.time()
+            log(f"[INFO] {name}: waiting... {ready}/{expected} new container(s) ready so far")
         time.sleep(interval)
-    ready, total = _containers_ready(client, project, eid, log)
+    ready, total = _containers_ready(client, project, eid, log,
+                                     created_after=redeploy_started)
     log(f"[ERROR] {name}: only {ready}/{expected} services ready after wait ({total} containers).")
     return False
 
@@ -428,10 +450,13 @@ def update_portainer(client, eid, log) -> bool:
     compose talks to the daemon, it never writes to the compose directory.
     """
     compose_dir = (get("portainer_compose_dir", "") or "").strip()
+    # Mode selection: compose_dir set = Mode B wins. Portainer-as-stack
+    # (Mode A) is the EXCEPTION - normally Portainer is never a Portainer
+    # stack, so the explicit compose_dir is the stronger signal. Users who
+    # DO deploy Portainer as a stack must leave compose_dir empty.
+    if compose_dir:
+        return _update_portainer_compose_cli(compose_dir, log)
     if not get("include_portainer", False):
-        if compose_dir:
-            # Mode B - plain-compose Portainer via docker CLI
-            return _update_portainer_compose_cli(compose_dir, log)
         log("[INFO] Portainer self-update disabled (include_portainer=false).")
         return True
     self_names = _self_stack_names(client, eid)
