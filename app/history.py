@@ -13,11 +13,63 @@ from .config import DATA_DIR, RUNS_DIR
 
 STATUS_FILE = DATA_DIR / "status.json"
 HISTORY_FILE = DATA_DIR / "history.jsonl"
+STATS_FILE = DATA_DIR / "stats.jsonl"   # prune reclaim stats (90d window)
+STATS_FILE_MAX_AGE_DAYS = 30
 KEEP_RUNS = 200
 KEEP_LOGS_PER_KIND = 20
 RUN_LOG_MAX_AGE_DAYS = 30
 
 _lock = threading.Lock()
+
+
+def record_prune_stats(reclaimed_mb: int, images_deleted: int) -> None:
+    """Append one prune outcome for the 30-day reclaim chart."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    entry = {"ts": time.time(), "reclaimed_mb": reclaimed_mb,
+             "images_deleted": images_deleted}
+    with _lock:
+        with open(STATS_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+
+
+def prune_stats(days: int = 30) -> dict:
+    """Aggregate prune stats over the last N days."""
+    if not STATS_FILE.exists():
+        return {"reclaimed_mb_30d": 0, "prune_runs_30d": 0,
+                "images_deleted_30d": 0}
+    cutoff = time.time() - STATS_FILE_MAX_AGE_DAYS * 86400
+    mb = imgs = runs = 0
+    with _lock:
+        for line in STATS_FILE.read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if e.get("ts", 0) < cutoff:
+                continue
+            mb += e.get("reclaimed_mb") or 0
+            imgs += e.get("images_deleted") or 0
+            runs += 1
+    return {"reclaimed_mb_30d": mb, "prune_runs_30d": runs,
+            "images_deleted_30d": imgs}
+
+
+def prune_stats_rotation() -> None:
+    """Drop stats older than 90 days (chart needs 30)."""
+    if not STATS_FILE.exists():
+        return
+    cutoff = time.time() - 90 * 86400
+    with _lock:
+        lines = []
+        for line in STATS_FILE.read_text(encoding="utf-8").splitlines():
+            try:
+                if json.loads(line).get("ts", 0) >= cutoff:
+                    lines.append(line)
+            except json.JSONDecodeError:
+                continue
+        tmp = STATS_FILE.with_suffix(".tmp")
+        tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        tmp.replace(STATS_FILE)
 
 
 def _write_status(payload: dict) -> None:
