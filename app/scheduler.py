@@ -219,6 +219,14 @@ class Scheduler:
             print(f"[scheduler] update crashed:\n{self.last_error}", file=sys.stderr,
                   flush=True)
             if runlog:
+                # the traceback MUST land in the run log - without it the
+                # history shows only 'Run finished, success=False' with no
+                # hint what crashed (seen with self-update compose crashes)
+                try:
+                    runlog.log("[ERROR] update crashed with unhandled "
+                               "exception:\n" + self.last_error)
+                except Exception:  # noqa: BLE001
+                    pass
                 runlog.finish(False)
         finally:
             # run_full_update may have finalized the runlog already (self-stack

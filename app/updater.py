@@ -558,6 +558,24 @@ def reconciliation_sweep(client, eid, stacks, log) -> bool:
 
 
 # ------------------------------------------------- network integrity repairs
+def _ip_like(value: str) -> bool:
+    """True if s looks like an IPv4/IPv6 address (not a Docker keyword such
+    as 'host-gateway', which Docker stores unresolved in ExtraHosts and
+    re-resolves at every container start - keywords can never go stale)."""
+    if not value:
+        return False
+    v = value.strip("[]")
+    # IPv4: four dot-separated octets
+    if v.count(".") == 3:
+        octs = v.split(".")
+        try:
+            return all(0 <= int(o) <= 255 for o in octs)
+        except ValueError:
+            return False
+    # IPv6 heuristic: contains ':' and only hex/colon chars
+    return ":" in v and all(c in "0123456789abcdefABCDEF:" for c in v)
+
+
 def _default_bridge_gateway(client, eid, log) -> str:
     """Gateway of the default bridge network (docker0) - the address Docker
     resolves 'host-gateway' to at container creation. This is the ONLY
@@ -621,8 +639,13 @@ def _repair_stale_gateways(client, eid, log) -> bool:
             mapped = []
             for h in (insp.get("Config", {}).get("ExtraHosts") or []):
                 alias, _, ip = (h or "").partition(":")
+                # only EXPLICIT IPs can go stale. The keyword 'host-gateway'
+                # is stored unresolved and re-resolved at every container
+                # start - it can never be stale (comparing it against any IP
+                # was the false-positive generator).
                 if alias in ("host.docker.internal", "host-gateway") and ip:
-                    mapped.append(ip)
+                    if _ip_like(ip):
+                        mapped.append(ip)
             if not mapped:
                 continue
             checked += 1
@@ -679,7 +702,8 @@ def _repair_stale_gateways(client, eid, log) -> bool:
         for h in hosts_str.split():
             if ":" in h:
                 alias, ip = h.split(":", 1)
-                if alias in ("host.docker.internal", "host-gateway"):
+                # only EXPLICIT IPs can go stale (keyword re-resolves at start)
+                if alias in ("host.docker.internal", "host-gateway") and _ip_like(ip):
                     mapped.append(ip)
         if not mapped:
             continue
