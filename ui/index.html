@@ -355,8 +355,8 @@ async function refresh(){
   $('cUpdSub').textContent=s.check&&s.check.checked_at?('checked '+ago(s.check.checked_at)):'no check yet';
   const lr=s.last_run;
   lastFailedRun=lr&&!lr.success&&lr.run_id?lr.run_id:null;
-  $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success?'OK':'FAILED'):'–';
-  $('cLast').style.color=lr?(lr.success?'var(--ok)':'var(--err)'):'var(--txt)';
+  $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success==null?'RESTARTED':lr.success?'OK':'FAILED'):'–';
+  $('cLast').style.color=lr?(lr.success==null?'var(--mut)':lr.success?'var(--ok)':'var(--err)'):'var(--txt)';
   const ld=lr?(lr.duration_s??null):null;
   const durTxt=ld==null?'?':(ld>=60?Math.floor(ld/60)+'m '+Math.round(ld%60)+'s':Math.round(ld)+'s');
   $('cLastSub').textContent=lr?(ago(lr.finished)+' · '+lr.kind+' · '+durTxt):'no runs yet';
@@ -672,7 +672,7 @@ async function loadHistory(){
     const tr=document.createElement('tr');
     tr.innerHTML=`<td class="mono">${esc(r.run_id)}</td><td>${esc(r.kind)}</td><td>${esc(r.trigger)}</td>
      <td>${fmt(r.finished)}</td><td class="num">${dur}</td>
-     <td>${r.success?'<span class="badge b-ok">success</span>':'<span class="badge b-err">failed</span>'}</td>
+     <td>${r.success==null?'<span class="badge b-mut">restarted</span>':r.success?'<span class="badge b-ok">success</span>':'<span class="badge b-err">failed</span>'}</td>
      <td><button class="btn sm sec" data-run="${esc(r.run_id)}">Log</button></td>`;
     tr.querySelector('[data-run]').onclick=()=>showRunLog(r.run_id);
     tb.appendChild(tr);

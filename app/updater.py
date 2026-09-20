@@ -456,11 +456,18 @@ def self_update_run(runlog) -> bool:
                    f"{', '.join(sorted(self_names))} found.")
         runlog.finish(False)
         return False
-    ok = redeploy_single_stack(client, own, eid, runlog.log)
-    runlog.finish(ok)
-    # if we get here the redeploy failed or completed before the container
-    # was replaced; either way the caller records the result
-    return ok
+    # Finalize history BEFORE the redeploy with a neutral result: the
+    # redeploy replaces this container mid-wait, so the run would otherwise
+    # hang in 'running' forever - and it is NOT a failure, it is the
+    # expected outcome of a self-update. success=None renders as 'restarted'
+    # in the UI (no failed/success flag).
+    runlog.log("[INFO] Redeploy triggered - this container will restart. "
+               "The new instance takes over automatically.")
+    runlog.finish_neutral()
+    redeploy_single_stack(client, own, eid, runlog.log)
+    # the redeploy fires; this container dies mid-wait. If we ever get
+    # here, the redeploy failed or completed without replacing us.
+    return True
 
 
 # ------------------------------------------------------------ portainer update

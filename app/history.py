@@ -190,6 +190,48 @@ class RunLogger:
         self.steps.append({"name": name, "ok": ok, "detail": detail})
         self.log(f"{'[OK]' if ok else '[ERROR]'} {name} {detail}".rstrip())
 
+    def finish_neutral(self) -> dict:
+        """Finalize a self-update run WITHOUT a success/failed flag: the
+        redeploy replaces this container mid-wait (the expected outcome of
+        a deliberate self-update), so neither 'failed' nor 'success' would
+        be truthful. Recorded as neutral 'restarted' entry, log preserved."""
+        if getattr(self, "_finished", False):
+            return self._entry
+        self._finished = True
+        try:
+            self._fh.write(f"[{time.strftime('%H:%M:%S')}] Run finalized "
+                           f"(self-update redeploy triggered)\n")
+            self._fh.close()
+        except (ValueError, OSError):
+            pass
+        entry = {
+            "run_id": self.run_id,
+            "kind": self.kind,
+            "trigger": self.trigger,
+            "started": self.started,
+            "finished": time.time(),
+            "duration_s": round(time.time() - self.started, 1),
+            "success": None,
+            "steps": self.steps,
+        }
+        self._entry = entry
+        with _lock:
+            with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+            lines = HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+            if len(lines) > KEEP_RUNS:
+                tmp = HISTORY_FILE.with_suffix(".tmp")
+                tmp.write_text("\n".join(lines[-KEEP_RUNS:]) + "\n", encoding="utf-8")
+                tmp.replace(HISTORY_FILE)
+            st = current_status()
+            st.pop("current_run", None)
+            st["state"] = "idle"
+            st["last_run"] = entry
+            st["runs_total"] = st.get("runs_total", 0) + 1
+            _write_status(st)
+        prune_run_logs()
+        return entry
+
     def finish(self, ok: bool) -> dict:
         """Finalize the run. Idempotent: the caller and an early self-finalize
         (before the service redeploys itself and dies) may both call this."""
