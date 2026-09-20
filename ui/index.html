@@ -226,11 +226,16 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     <label class="f">Max parallel deploys</label><input type="number" id="sPar" min="1" max="10">
     <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
     <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
-    <label class="f" style="margin-top:12px"><input type="checkbox" id="sIncludePortainer"> Also update Portainer itself (redeploys the Portainer stack at the end of every full update)</label>
-    <label class="f">Self stack name (this app's and Portainer's stack name, e.g. portainer_update_service,portainer — empty = auto-detect)</label>
-    <input type="text" id="sSelfStack">
-    <label class="f">Portainer compose dir (fallback only — when Portainer is NOT deployed as a Portainer stack)</label>
-    <input type="text" id="sCompose" placeholder="host path, mounted into the container as /host-portainer">
+    <label class="f" style="margin-top:12px">Portainer self-update mode</label>
+    <div style="color:var(--mut);font-size:12px">Portainer is normally <b>not</b> a Portainer stack (it manages the others). Two modes, auto-selected:</div>
+    <div style="margin-top:6px">
+      <label class="f" style="margin:4px 0"><input type="checkbox" id="sIncludePortainer"> <b>Mode A — Portainer runs as a Portainer stack:</b> redeploy it via the Portainer API (needs "Self stack name" below)</label>
+      <label class="f" style="margin:4px 0">Mode B — <b>Portainer compose dir</b> (normal setup): when set below, the app runs <span class="mono">docker compose pull &amp;&amp; up -d</span> in the mounted dir (needs the docker-socket + compose-dir volume mounts in the stack)</label>
+    </div>
+    <label class="f">Self stack name (Mode A only — the Portainer stack's name in Portainer, e.g. portainer — empty = auto-detect)</label>
+    <input type="text" id="sSelfStack" placeholder="only needed for Mode A">
+    <label class="f">Portainer compose dir (Mode B — container path where Portainer's docker-compose.yml is mounted)</label>
+    <input type="text" id="sCompose" placeholder="e.g. /host-portainer (mount: /path/on/host:/host-portainer:ro)">
     <label class="f">Check cache (minutes)</label><input type="number" id="sCache" min="5" max="720">
     <label class="f">Failure notification webhook (optional, e.g. ntfy)</label><input type="url" id="sHook" placeholder="https://ntfy.example/your-topic">
 
@@ -339,7 +344,9 @@ async function refresh(){
   lastFailedRun=lr&&!lr.success&&lr.run_id?lr.run_id:null;
   $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success?'OK':'FAILED'):'–';
   $('cLast').style.color=lr?(lr.success?'var(--ok)':'var(--err)'):'var(--txt)';
-  $('cLastSub').textContent=lr?(ago(lr.finished)+' · '+lr.kind+' · '+(lr.duration_s??'?')+'s'):'no runs yet';
+  const ld=lr?(lr.duration_s??null):null;
+  const durTxt=ld==null?'?':(ld>=60?Math.floor(ld/60)+'m '+Math.round(ld%60)+'s':Math.round(ld)+'s');
+  $('cLastSub').textContent=lr?(ago(lr.finished)+' · '+lr.kind+' · '+durTxt):'no runs yet';
   if(s.scheduler){
    const nf=s.scheduler.next_full_update;
    const desc=s.scheduler.schedule_desc||'';
@@ -399,10 +406,15 @@ function activityLine(tail){
   if((m=l.match(/\[ERROR\] (.+)$/)))return '⚠ '+m[1];
   if((m=l.match(/Found (\d+) stacks\. Deploying (\d+) now/)))
    return `redeploying ${m[2]} stacks…`;
+  if((m=l.match(/waiting\.\.\. (\d+)\/(\d+) new container/)))
+   return `waiting for ${m[1]}/${m[2]} new containers to become healthy…`;
   if((m=l.match(/Pulling image (.+?) for/)))return `pulling ${m[1]}…`;
+  if((m=l.match(/Processing stack: (.+?) \(ID/)))return `checking stack ${m[1]}…`;
   if((m=l.match(/Checking (\d+) stacks/)))return `checking ${m[1]} stacks against DockerHub…`;
+  if(l.includes('compose pull'))return 'pulling latest Portainer image…';
+  if(l.includes('compose up'))return 'restarting Portainer containers…';
  }
- return 'working…';
+  return 'working…';
 }
 let bannerTimer=null;
 
@@ -635,21 +647,24 @@ async function loadHistory(){
   $('hRate').textContent=h.length?Math.round(okN/h.length*100)+'%':'–';
   const full=h.filter(r=>r.kind==='full');
   const durs=full.map(r=>r.duration_s).filter(x=>x!=null);
-  $('hDur').textContent=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length)+'s':'–';
+  const avg=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length):null;
+  $('hDur').textContent=avg!=null?(avg>=60?Math.floor(avg/60)+'m '+avg%60+'s':avg+'s'):'–';
   if(!h.length){tb.innerHTML='<tr><td colspan=7 class="empty">No runs yet.</td></tr>'}
   else{
    tb.innerHTML='';
    [...h].reverse().forEach(r=>{
+    const d=r.duration_s;
+    const dur=d==null?'?':(d>=60?Math.floor(d/60)+'m '+Math.round(d%60)+'s':Math.round(d)+'s');
     const tr=document.createElement('tr');
     tr.innerHTML=`<td class="mono">${esc(r.run_id)}</td><td>${esc(r.kind)}</td><td>${esc(r.trigger)}</td>
-     <td>${fmt(r.finished)}</td><td class="num">${r.duration_s??'?'}</td>
+     <td>${fmt(r.finished)}</td><td class="num">${dur}</td>
      <td>${r.success?'<span class="badge b-ok">success</span>':'<span class="badge b-err">failed</span>'}</td>
      <td><button class="btn sm sec" data-run="${esc(r.run_id)}">Log</button></td>`;
     tr.querySelector('[data-run]').onclick=()=>showRunLog(r.run_id);
     tb.appendChild(tr);
-   });
-  }
- }catch(e){tb.innerHTML=`<tr><td colspan=7 class="empty">${esc(e.message)}</td></tr>`}
+    });
+   }
+  }catch(e){tb.innerHTML=`<tr><td colspan=7 class="empty">${esc(e.message)}</td></tr>`}
 }
 $('cInvCard').onclick=()=>showTab('stacks');
 $('cLastCard').onclick=()=>{if(lastFailedRun)showRunLog(lastFailedRun);else showTab('history')};
@@ -767,7 +782,7 @@ $('btnCheck').onclick=async()=>{
 };
 $('btnRecheck').onclick=()=>$('btnCheck').onclick();
 $('btnUpdate').onclick=async()=>{
- if(!confirm('Run full update now?\n\n- backs up Portainer data\n- prunes unused images + build cache\n- redeploys ALL stacks\n- updates Portainer itself\n\nThis takes several minutes.'))return;
+ if(!confirm('Run full update now?\n\n- backs up Portainer data\n- prunes unused images + build cache\n- redeploys ALL stacks (waits for each to become healthy)\n- updates Portainer itself\n\nThis takes several minutes (deploys run up to '+($('sWait')?.value||300)+'s per stack, max '+($('sPar')?.value||3)+' parallel).'))return;
  try{const r=await api('/api/update',{method:'POST'});
   toast('Full update started - run '+r.run_id,'ok',true);
   gateBusyFlag=true;setBusyUI(true);ensureBannerTimer();await refreshRunBanner();
