@@ -44,6 +44,8 @@ DEFAULTS = {
     "notify_webhook": "",            # optional POST target for failure notifications
     "self_stack_name": "",           # compose project name of THIS app when deployed
                                      # as a Portainer stack (enables self-update-last)
+    "include_portainer": False,      # true = also update Portainer itself
+                                     # (redeploy its stack via the API, LAST step)
     "repairs": {
         "enabled": True,
         # optional user-defined repair rules (see config.example.yaml);
@@ -108,6 +110,10 @@ def validate(key: str, value):
     if key in ("portainer_api_key", "portainer_compose_dir", "auth_token",
                "self_stack_name"):
         return str(value or "").strip()
+    if key == "include_portainer":
+        if not isinstance(value, bool):
+            raise ConfigError("include_portainer must be true/false")
+        return value
     raise ConfigError(f"unknown setting: {key}")
 
 

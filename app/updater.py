@@ -188,6 +188,15 @@ def cleanup_docker(client: Portainer, eid, log) -> None:
     reclaimed_bld = bld.get("SpaceReclaimed") or 0
     total_mb = (reclaimed_img + reclaimed_bld) // (1024 * 1024)
     log(f"[OK] Prune completed (reclaimed ~{total_mb} MB).")
+    # persist reclaim stats for the 30-day chart
+    try:
+        from .history import record_prune_stats
+        record_prune_stats(
+            reclaimed_mb=total_mb,
+            images_deleted=len(img.get("ImagesDeleted") or []),
+        )
+    except Exception as e:  # noqa: BLE001 - stats must never kill the run
+        log(f"[WARN] prune stats not recorded: {e}")
 
 
 # --------------------------------------------------------------------- stacks
@@ -371,40 +380,58 @@ def wait_portainer_ready(client, log, timeout_s=90) -> bool:
     return False
 
 
-def update_portainer(log) -> bool:
-    compose_dir = get("portainer_compose_dir", "")
-    if not compose_dir:
-        log("[INFO] Portainer self-update not configured "
-            "(portainer_compose_dir empty - normal in container mode).")
+def update_portainer(client, eid, log) -> bool:
+    """Redeploy the Portainer stack through the Portainer API (like any other
+    stack). Enabled by the 'include_portainer' setting + 'self_stack_name'.
+
+    The engine calls this LAST (after run history is finalized) because the
+    API may go down mid-redeploy; wait_portainer_ready() guards the aftermath.
+    """
+    if not get("include_portainer", False):
+        log("[INFO] Portainer self-update disabled (include_portainer=false).")
         return True
-    from pathlib import Path
-    if not (Path(compose_dir) / "docker-compose.yml").exists():
-        log(f"[WARN] No docker-compose.yml in {compose_dir} - skipping self-update.")
-        return True
-    docker = shutil.which("docker")
-    if not docker:
-        log("[ERROR] docker CLI not found - cannot self-update Portainer.")
-        return False
+    self_names = _self_stack_names(client, eid)
+    # include_portainer mode: Portainer itself is the named self stack
+    portainer_name = (get("self_stack_name", "") or "").strip().lower()
+    if not portainer_name:
+        portainer_name = "portainer"
+    if self_names and portainer_name not in self_names:
+        log(f"[INFO] '{portainer_name}' is not among detected self stacks "
+            f"({', '.join(self_names)}) - treating it as self stack anyway.")
     try:
-        p = subprocess.run([docker, "compose", "pull"],
-                           capture_output=True, text=True, timeout=900, cwd=compose_dir)
-        p2 = subprocess.run([docker, "compose", "up", "-d"],
-                            capture_output=True, text=True, timeout=900, cwd=compose_dir)
-        out = (p.stdout + p.stderr + p2.stdout + p2.stderr).strip()
-        rc_ok = p.returncode == 0 and p2.returncode == 0
-    except (OSError, subprocess.SubprocessError) as e:
+        stacks = client.stacks()
+    except PortainerError as e:
+        log(f"[ERROR] Could not fetch stacks for Portainer self-update: {e}")
+        return False
+    stack = next((s for s in stacks
+                  if (s.get("Name") or "").lower() == portainer_name
+                  and s.get("EndpointId") == eid), None)
+    if not stack:
+        log(f"[WARN] Portainer self-update: no stack named '{portainer_name}' "
+            f"on endpoint {eid} - set self_stack_name correctly or disable "
+            f"include_portainer.")
+        return False
+    # intentionally stopped? user intent wins
+    project = _project_name(portainer_name)
+    try:
+        cs = client.containers_by_project(project, eid)
+        if cs and not any(c.get("State") == "running" for c in cs):
+            log(f"[INFO] {portainer_name} fully stopped -> skip self-update (user intent).")
+            return True
+    except PortainerError as e:
+        log(f"[WARN] container check failed ({e}) - continuing.")
+    try:
+        content = client.stack_file(stack["Id"], eid)
+        if not content:
+            log(f"[ERROR] Empty compose file for {portainer_name}.")
+            return False
+        client.update_stack(stack["Id"], eid, content, stack.get("Env") or [])
+    except PortainerError as e:
         log(f"[ERROR] Portainer self-update failed: {e}")
         return False
-    if not rc_ok:
-        log(f"[ERROR] Portainer self-update failed: {out[:300]}")
-        return False
-    time.sleep(5)
-    rc3, out3 = _cli(["ps", "-q", "--filter", "name=^portainer$", "--filter", "status=running"])
-    if rc3 == 0 and out3:
-        log("[OK] Portainer self-update completed.")
-        return True
-    log("[ERROR] compose up reported success but portainer is not running.")
-    return False
+    log(f"[OK] Portainer self-update triggered (redeploy of '{portainer_name}').")
+    wait_portainer_ready(client, log)
+    return True
 
 
 # ---------------------------------------------------------- reconciliation
@@ -522,10 +549,11 @@ def _repair_stale_gateways(client, eid, log) -> bool:
         log("[INFO] no running containers, skipping gateway check.")
         return True
     ids = out.split()
+    # index on missing map keys errors out - guard with default
     rc, out = _cli(["inspect", "--format",
                     "{{.Name}}|{{index .Config.Labels \"com.docker.compose.project\"}}|"
                     "{{range $k, $v := .NetworkSettings.Networks}}{{$v.Gateway}} {{end}}|"
-                    "{{range .Config.ExtraHosts}}{{.}} {{end}}", *ids])
+                    "{{range .HostConfig.ExtraHosts}}{{.}} {{end}}", *ids])
     if rc != 0:
         log(f"[WARN] container inspect failed, skipping gateway check: {out[:150]}")
         return True
@@ -581,7 +609,7 @@ def _repair_stale_gateways(client, eid, log) -> bool:
     return ok
 
 
-def _run_repair_rule(rule, log) -> bool:
+def _run_repair_rule(rule, client, eid, log) -> bool:
     """One configurable DNS/connectivity repair rule. Shape (config.yaml):
 
         - name: endpoint repair after network prune
@@ -595,37 +623,84 @@ def _run_repair_rule(rule, log) -> bool:
             restart_containers: [forwarder]
 
     All fields optional; a rule without dns_check applies its fix directly.
+    Everything runs via the Portainer API (containers/exec + network connect).
     """
     name = rule.get("name", "unnamed repair rule")
     when = rule.get("when_containers") or []
     if when:
-        rc, out = _cli(["ps", "--format", "{{.Names}}"])
-        present = set(out.splitlines()) if rc == 0 else set()
+        try:
+            cs = client.all_containers(eid)
+        except PortainerError as e:
+            log(f"[INFO] repair rule '{name}': container query failed ({e}), skipping.")
+            return True
+        present = {(c.get("Names") or [""])[0].lstrip("/")
+                   for c in cs if c.get("State") == "running"}
         missing = [c for c in when if c not in present]
         if missing:
             log(f"[INFO] repair rule '{name}': prerequisites not running "
                 f"({', '.join(missing)}), skipping.")
             return True
     dns = rule.get("dns_check")
+    fix = rule.get("fix") or {}
     if dns:
         src, host = dns.get("from_container"), dns.get("hostname")
-        rc, _ = _cli(["exec", src, "getent", "hosts", host])
-        if rc == 0:
+        # find the source container's id
+        src_cid = None
+        try:
+            for c in client.all_containers(eid):
+                if (c.get("Names") or [""])[0].lstrip("/") == src:
+                    src_cid = c["Id"]
+                    break
+        except PortainerError as e:
+            log(f"[ERROR] repair rule '{name}': container query failed ({e})")
+            return False
+        if not src_cid:
+            log(f"[INFO] repair rule '{name}': source container '{src}' not found, skipping.")
+            return True
+        try:
+            code, out = client.exec_in_container(src_cid, ["getent", "hosts", host], eid)
+        except PortainerError as e:
+            log(f"[WARN] repair rule '{name}': exec failed ({e}).")
+            code, out = 1, ""
+        if code == 0:
             log(f"[OK] repair rule '{name}': {host} resolvable from {src}.")
             return True
         log(f"[WARN] repair rule '{name}': {host} NOT resolvable from {src}. Fixing...")
-    fix = rule.get("fix") or {}
     if fix.get("connect_network") and fix.get("connect_container"):
-        rc, out = _cli(["network", "connect", fix["connect_network"], fix["connect_container"]])
-        if rc != 0:
-            log(f"[ERROR] repair rule '{name}': network connect failed: {out[:120]}")
+        try:
+            nets = client.networks(eid)
+            net_id = next((n["Id"] for n in nets if n.get("Name") == fix["connect_network"]), None)
+            if not net_id:
+                log(f"[ERROR] repair rule '{name}': network '{fix['connect_network']}' not found.")
+                return False
+            cid = None
+            for c in client.all_containers(eid):
+                if (c.get("Names") or [""])[0].lstrip("/") == fix["connect_container"]:
+                    cid = c["Id"]
+                    break
+            if not cid:
+                log(f"[ERROR] repair rule '{name}': container '{fix['connect_container']}' not found.")
+                return False
+            client.connect_network(net_id, cid, eid)
+        except PortainerError as e:
+            log(f"[ERROR] repair rule '{name}': network connect failed: {e}")
             return False
     for c in fix.get("restart_containers") or []:
-        _cli(["restart", c], timeout=60)
+        try:
+            for cc in client.all_containers(eid):
+                if (cc.get("Names") or [""])[0].lstrip("/") == c:
+                    client.restart_container(cc["Id"], eid)
+                    break
+        except PortainerError as e:
+            log(f"[WARN] repair rule '{name}': restart of {c} failed: {e}")
     if dns:
         time.sleep(3)
-        rc, _ = _cli(["exec", dns["from_container"], "getent", "hosts", dns["hostname"]])
-        if rc == 0:
+        try:
+            code, _ = client.exec_in_container(src_cid, ["getent", "hosts", host], eid)
+        except PortainerError as e:
+            log(f"[ERROR] repair rule '{name}': post-fix exec failed: {e}")
+            return False
+        if code == 0:
             log(f"[OK] repair rule '{name}': repaired, DNS OK.")
             return True
         log(f"[ERROR] repair rule '{name}': still failing after fix. Manual check needed.")
@@ -648,7 +723,7 @@ def post_deployment_repairs(client, eid, log) -> bool:
     ok = _repair_stale_gateways(client, eid, log)
     for rule in cfg.get("rules") or []:
         try:
-            ok = _run_repair_rule(rule, log) and ok
+            ok = _run_repair_rule(rule, client, eid, log) and ok
         except Exception as e:  # noqa: BLE001 - a bad rule must not kill the run
             log(f"[ERROR] repair rule '{rule.get('name', '?')}' crashed: {e}")
             ok = False
@@ -698,10 +773,11 @@ def run_full_update(runlog) -> bool:
     runlog.step("reconciliation_sweep", ok_sweep)
     ok_repairs = post_deployment_repairs(client, eid, runlog.log)
     runlog.step("post_deployment_repairs", ok_repairs)
-    # Portainer self-update LAST: restarting the API mid-run would blind the
-    # sweep. After a self-update, WAIT for the API to come back so a follow-up
-    # check/sweep doesn't run against a restarting Portainer.
-    ok_port = update_portainer(runlog.log)
+    # Portainer self-update LAST (before deferred self-stacks): restarting the
+    # API mid-run would blind the sweep. After a self-update, WAIT for the
+    # API to come back so a follow-up check/sweep doesn't run against a
+    # restarting Portainer.
+    ok_port = update_portainer(client, eid, runlog.log)
     runlog.step("update_portainer", ok_port)
     if ok_port:
         wait_portainer_ready(client, runlog.log)

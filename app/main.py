@@ -164,7 +164,8 @@ def api_endpoints():
 
 @app.route("/api/history")
 def api_history():
-    return jsonify(history.history())
+    return jsonify({"history": history.history(),
+                    "prune_stats_30d": history.prune_stats()})
 
 
 @app.route("/api/runs/current")
@@ -346,6 +347,38 @@ def api_update():
     return jsonify({"ok": True, "run_id": run_id})
 
 
+@app.route("/api/inventory")
+def api_inventory():
+    """Docker inventory for the dashboard: unused images (reclaimable),
+    unused networks, totals. Read-only, computed live (cheap list calls)."""
+    client, e = _client_or_error()
+    if e:
+        return e
+    eid = client.endpoint_id
+    try:
+        imgs = client.images(eid)
+        cs = client.all_containers(eid)
+        nets = client.networks(eid)
+    except PortainerError as err:
+        return _err(str(err), 502)
+    used_ids = {c.get("ImageID") for c in cs if c.get("ImageID")}
+    unused = [i for i in imgs if i.get("Id") not in used_ids]
+    unused_mb = sum((i.get("Size") or 0) for i in unused) // (1024 * 1024)
+    containers_per_net: dict = {}
+    for c in cs:
+        for nid in ((c.get("NetworkSettings", {}) or {}).get("Networks") or {}):
+            containers_per_net[nid] = containers_per_net.get(nid, 0) + 1
+    unused_nets = [n for n in nets if containers_per_net.get(n.get("Id"), 0) == 0]
+    return jsonify({
+        "images_total": len(imgs),
+        "images_unused": len(unused),
+        "images_unused_mb": unused_mb,
+        "networks_total": len(nets),
+        "networks_unused": len(unused_nets),
+        "containers_total": len(cs),
+    })
+
+
 @app.route("/api/prune", methods=["POST"])
 def api_prune():
     client, e = _client_or_error()
@@ -383,7 +416,7 @@ def api_settings_post():
                "tls_verify", "max_parallel_deploys",
                "deploy_wait_time", "keep_backups", "portainer_compose_dir",
                "check_cache_minutes", "listen_port", "auth_token",
-               "notify_webhook", "self_stack_name"}
+               "notify_webhook", "self_stack_name", "include_portainer"}
     # two-pass: validate EVERYTHING first, then apply - a bad key must never
     # leave earlier keys mutated in memory (memory/disk divergence)
     from .config import validate

@@ -118,6 +118,47 @@ class Portainer:
         """Portainer admin-only: prune ALL build cache (all=true)."""
         return self._docker("POST", "/build/prune?all=true", eid).json()
 
+    def images(self, eid=None):
+        return self._docker("GET", "/images/json?all=1", eid).json()
+
+    def networks(self, eid=None):
+        return self._docker("GET", "/networks", eid).json()
+
+    def connect_network(self, network_id, container_id, eid=None):
+        return self._docker("POST", f"/networks/{network_id}/connect", eid,
+                            json={"Container": container_id})
+
+    def restart_container(self, cid, eid=None, timeout_s=30):
+        return self._docker("POST", f"/containers/{cid}/restart?t={timeout_s}", eid)
+
+    def exec_in_container(self, cid, cmd, eid=None, timeout_s=30):
+        """Run a command inside a container via the Portainer docker-proxy
+        exec flow. Returns (exit_code, stdout_text). Handles the 8-byte
+        frame-header multiplexing of the non-TTY stream."""
+        create = self._docker("POST", f"/containers/{cid}/exec", eid,
+                              json={"AttachStdout": True, "AttachStderr": True,
+                                    "Cmd": cmd if isinstance(cmd, list) else [cmd]})
+        exec_id = create.json().get("Id")
+        if not exec_id:
+            raise PortainerError("exec create returned no Id")
+        r = self._docker("POST", f"/exec/{exec_id}/start", eid,
+                         json={"Detach": False, "Tty": False}, timeout=timeout_s)
+        # demultiplex the docker stream (non-TTY): 8-byte frames
+        # [stream_type(1), 0,0,0, size(4 BE)]
+        stdout = bytearray()
+        buf = r.content
+        i = 0
+        while i + 8 <= len(buf):
+            size = int.from_bytes(buf[i + 4:i + 8], "big")
+            stdout.extend(buf[i + 8:i + 8 + size])
+            i += 8 + size
+        try:
+            insp = self._docker("GET", f"/exec/{exec_id}/json", eid).json()
+            code = insp.get("ExitCode", 0)
+        except PortainerError:
+            code = 0
+        return code, stdout.decode("utf-8", errors="replace").strip()
+
     def backup(self, password=None):
         """Download a Portainer datastore backup (tar.gz attachment).
         Uses the app's session key as auth (admin required)."""

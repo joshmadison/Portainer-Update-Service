@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -126,7 +126,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
   <button class="btn sm" onclick="showTab('settings')">Open setup</button>
 </div>
 <div class="banner" id="runBanner">
-  <div class="b-txt"><b id="rbTitle">Update running…</b>
+  <div class="b-txt"><b id="rbTitle">Update runningâ€¦</b>
     <div class="b-sub" id="rbSub"></div>
     <pre class="log" id="rbTail" style="max-height:52px;margin-top:6px;font-size:11px"></pre></div>
   <button class="btn sec sm" onclick="showTab('history')">History</button>
@@ -136,16 +136,19 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
 <!-- ============================================================ DASHBOARD -->
 <div id="tab-dash">
   <div class="grid cards">
-    <div class="card"><div class="lbl">Updates available</div><div class="val" id="cUpd">–</div><div class="sub" id="cUpdSub"></div></div>
-    <div class="card" id="cLastCard" style="cursor:pointer" title="open failed run log"><div class="lbl">Last run</div><div class="val" id="cLast">–</div><div class="sub" id="cLastSub"></div></div>
-    <div class="card"><div class="lbl">Next scheduled update</div><div class="val" id="cNext">–</div><div class="sub" id="cNextSub"></div></div>
-    <div class="card"><div class="lbl">Server time</div><div class="val" id="cServerTime" style="font-size:18px">–</div><div class="sub" id="cServerTzSub"></div></div>
-    <div class="card"><div class="lbl">Total runs</div><div class="val" id="cRuns">–</div><div class="sub" id="cRunsSub"></div></div>
+    <div class="card"><div class="lbl">Updates available</div><div class="val" id="cUpd">â€“</div><div class="sub" id="cUpdSub"></div></div>
+    <div class="card" id="cLastCard" style="cursor:pointer" title="open failed run log"><div class="lbl">Last run</div><div class="val" id="cLast">â€“</div><div class="sub" id="cLastSub"></div></div>
+    <div class="card"><div class="lbl">Next scheduled update</div><div class="val" id="cNext">â€“</div><div class="sub" id="cNextSub"></div></div>
+    <div class="card"><div class="lbl">Server time</div><div class="val" id="cServerTime" style="font-size:18px">â€“</div><div class="sub" id="cServerTzSub"></div></div>
+    <div class="card" id="cInvCard" style="cursor:pointer" title="unused images + networks">
+      <div class="lbl">Reclaimable</div><div class="val" id="cInv">–</div><div class="sub" id="cInvSub"></div></div>
+    <div class="card"><div class="lbl">Reclaimed (30d)</div><div class="val" id="cReclaim">–</div><div class="sub" id="cReclaimSub"></div></div>
+    <div class="card"><div class="lbl">Total runs</div><div class="val" id="cRuns">â€“</div><div class="sub" id="cRunsSub"></div></div>
   </div>
 
   <section>
-    <div class="spread"><h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks →</a></div>
-    <div class="panel"><table><thead><tr><th>Stack</th><th class="num">Services</th><th>Updates</th><th>Images</th></tr></thead><tbody id="dashStacks"><tr><td colspan=4 class="empty">Loading…</td></tr></tbody></table></div>
+    <div class="spread"><h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks â†’</a></div>
+    <div class="panel"><table><thead><tr><th>Stack</th><th class="num">Services</th><th>Updates</th><th>Images</th></tr></thead><tbody id="dashStacks"><tr><td colspan=4 class="empty">Loadingâ€¦</td></tr></tbody></table></div>
   </section>
 
   <section>
@@ -163,15 +166,15 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     </div></div>
   <div class="panel"><table>
     <thead><tr><th>Stack</th><th>Service</th><th>Image</th><th>Mode</th><th>Update</th><th></th></tr></thead>
-    <tbody id="stackRows"><tr><td colspan=6 class="empty">Loading…</td></tr></tbody>
+    <tbody id="stackRows"><tr><td colspan=6 class="empty">Loadingâ€¦</td></tr></tbody>
   </table></div>
 </div>
 
 <!-- ============================================================== HISTORY -->
 <div id="tab-history" style="display:none">
   <div class="grid cards">
-    <div class="card"><div class="lbl">Success rate</div><div class="val" id="hRate">–</div><div class="sub">last 200 runs</div></div>
-    <div class="card"><div class="lbl">Avg duration</div><div class="val" id="hDur">–</div><div class="sub">full updates</div></div>
+    <div class="card"><div class="lbl">Success rate</div><div class="val" id="hRate">â€“</div><div class="sub">last 200 runs</div></div>
+    <div class="card"><div class="lbl">Avg duration</div><div class="val" id="hDur">â€“</div><div class="sub">full updates</div></div>
   </div>
   <section>
     <h2>Run duration &amp; outcome</h2>
@@ -180,7 +183,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
   <section>
     <h2>Run log</h2>
     <div class="panel"><table><thead><tr><th>Run</th><th>Kind</th><th>Trigger</th><th>When</th><th class="num">Duration</th><th>Result</th><th></th></tr></thead>
-    <tbody id="histRows"><tr><td colspan=7 class="empty">Loading…</td></tr></tbody></table></div>
+    <tbody id="histRows"><tr><td colspan=7 class="empty">Loadingâ€¦</td></tr></tbody></table></div>
     <pre class="log" id="runLog" style="display:none"></pre>
   </section>
 </div>
@@ -228,14 +231,14 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
       </select>
     </div>
     <div class="b-sub" style="color:var(--mut);font-size:12px;margin-top:8px">
-      Server time: <span id="sServerTime">–</span> (<span id="sServerTz">–</span>) — the schedule refers to this clock.
+      Server time: <span id="sServerTime">â€“</span> (<span id="sServerTz">â€“</span>) â€” the schedule refers to this clock.
     </div>
     <label class="f">Max parallel deploys</label><input type="number" id="sPar" min="1" max="10">
     <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
     <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
     <label class="f">Portainer compose dir (self-update, host path)</label><input type="text" id="sCompose" placeholder="/opt/portainer">
-    <label class="f">Self stack name (this app's Portainer stack, enables self-update-last)</label>
-    <input type="text" id="sSelfStack" placeholder="e.g. portainer_update_service (empty = auto-detect)">
+    <label class="f">Portainer compose dir (fallback: only when Portainer is NOT a Portainer stack)</label>
+    <input type="text" id="sCompose" placeholder="empty = use include_portainer mode">
     <label class="f">Check cache (minutes)</label><input type="number" id="sCache" min="5" max="720">
     <label class="f">Failure notification webhook (optional, e.g. ntfy)</label><input type="url" id="sHook" placeholder="https://ntfy.example/your-topic">
 
@@ -274,8 +277,8 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
 
 <script>
 const $=id=>document.getElementById(id);
-const fmt=s=>s?new Date(s*1000).toLocaleString():'–';
-const ago=s=>{if(!s)return'–';const d=Math.floor(Date.now()/1000-s);
+const fmt=s=>s?new Date(s*1000).toLocaleString():'â€“';
+const ago=s=>{if(!s)return'â€“';const d=Math.floor(Date.now()/1000-s);
  if(d<60)return d+'s ago';if(d<3600)return Math.floor(d/60)+'m ago';
  if(d<86400)return Math.floor(d/3600)+'h ago';return Math.floor(d/86400)+'d ago'};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -326,29 +329,29 @@ async function refresh(){
   $('hdrInfo').textContent=s.configured?'':'not configured';
   $('hdrInfo').title='';
   AUTH_ENABLED=!!s.auth_enabled;
-  if(s.auth_enabled&&!AUTH_TOKEN)$('hdrInfo').textContent+=' · auth required';
+  if(s.auth_enabled&&!AUTH_TOKEN)$('hdrInfo').textContent+=' Â· auth required';
   // setup banner
   $('setupBanner').classList.toggle('open',!s.configured);
   // run banner: poll fast while busy
   if(busy){await refreshRunBanner(s)}
   else{$('runBanner').classList.remove('open');stopLiveLog()}
-  $('cUpd').textContent=s.check&&s.check.checked_at!=null?s.check.updates_available:'–';
+  $('cUpd').textContent=s.check&&s.check.checked_at!=null?s.check.updates_available:'â€“';
   $('cUpdSub').textContent=s.check&&s.check.checked_at?('checked '+ago(s.check.checked_at)):'no check yet';
   const lr=s.last_run;
   lastFailedRun=lr&&!lr.success&&lr.run_id?lr.run_id:null;
-  $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success?'OK':'FAILED'):'–';
+  $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success?'OK':'FAILED'):'â€“';
   $('cLast').style.color=lr?(lr.success?'var(--ok)':'var(--err)'):'var(--txt)';
-  $('cLastSub').textContent=lr?(ago(lr.finished)+' · '+lr.kind+' · '+(lr.duration_s??'?')+'s'):'no runs yet';
+  $('cLastSub').textContent=lr?(ago(lr.finished)+' Â· '+lr.kind+' Â· '+(lr.duration_s??'?')+'s'):'no runs yet';
   if(s.scheduler){
    const nf=s.scheduler.next_full_update;
    const desc=s.scheduler.schedule_desc||'';
    // server time card
-   $('cServerTime').textContent=s.scheduler.server_time_local||'–';
-   $('cServerTzSub').textContent=(s.scheduler.server_tz||'')+' · '+desc;
+   $('cServerTime').textContent=s.scheduler.server_time_local||'â€“';
+   $('cServerTzSub').textContent=(s.scheduler.server_tz||'')+' Â· '+desc;
    if(nf){
     const delta=Math.round((nf-Date.now()/1000)/60);
     if(delta<0){$('cNext').textContent='overdue';$('cNext').style.color='var(--warn)';
-      $('cNextSub').textContent=`by ${Math.abs(delta)} min · ${desc}`}
+      $('cNextSub').textContent=`by ${Math.abs(delta)} min Â· ${desc}`}
     else{
      $('cNext').textContent=new Date(nf*1000).toLocaleString([],{
       weekday:'short',hour:'2-digit',minute:'2-digit'});
@@ -357,10 +360,16 @@ async function refresh(){
     }
    }
    if(s.scheduler.consecutive_failures>0){
-    $('cNextSub').textContent+=' · '+s.scheduler.consecutive_failures+' failures (backoff)';
+    $('cNextSub').textContent+=' Â· '+s.scheduler.consecutive_failures+' failures (backoff)';
    }
   }
+  // inventory card
+  if(s.inventory){
+   $('cInv').textContent=s.inventory.images_unused+' ('+s.inventory.images_unused_mb+' MB)';
+   $('cInvSub').textContent='of '+s.inventory.images_total+' images · '+s.inventory.networks_unused+' unused networks';
+  }
   $('cRuns').textContent=s.runs_total??'–';
+  $('cRunsSub').textContent='all time';
   $('cRunsSub').textContent='all time';
   if(currentTab()==='dash')renderDashStacks(s.stacks||{});
   gateBusyFlag=!!busy;
@@ -384,9 +393,9 @@ async function refreshRunBanner(s){
   const steps=c.steps||[];
   const okN=steps.filter(x=>x.ok).length;
   const lastStep=steps.length?steps[steps.length-1].name:'starting';
-  $('rbTitle').textContent=(PHASES[c.holder]||c.holder||'job')+' running…';
+  $('rbTitle').textContent=(PHASES[c.holder]||c.holder||'job')+' runningâ€¦';
   const tail=(c.log_tail||[]).slice(-2).join('').trim();
-  $('rbSub').textContent=(steps.length?`step ${esc(lastStep)} · ${okN}/${steps.length} done · `:'')+
+  $('rbSub').textContent=(steps.length?`step ${esc(lastStep)} Â· ${okN}/${steps.length} done Â· `:'')+
    Math.round((Date.now()/1000-c.since)/60*10)/10+' min elapsed';
   $('rbTail').textContent=tail;
   $('rbLogBtn').onclick=()=>showRunLog(c.run_id,true);
@@ -411,7 +420,7 @@ function stopLiveLog(){if(liveLogTimer){clearInterval(liveLogTimer);liveLogTimer
  const p=$('runLog');if(p)p._live=null}
 async function showRunLog(id,live=false){
  if(currentTab()!=='history')showTab('history');
- const p=$('runLog');p.style.display='block';p.textContent='loading…';
+ const p=$('runLog');p.style.display='block';p.textContent='loadingâ€¦';
  p.scrollIntoView({behavior:'smooth',block:'nearest'});
  stopLiveLog();
  try{p.textContent=await (await fetch('/api/runs/'+encodeURIComponent(id)+'/log')).text()}
@@ -459,7 +468,8 @@ function fmtDur(v){return v>=60?(Math.round(v/6)/10)+'m':Math.round(v)+'s'}
 
 async function renderRunChart(){
  try{
-  const h=await api('/api/history');
+  const hr=await api('/api/history');
+  const h=hr.history||[];
   if(!h.length)return;
   const last=h.slice(-20);
   const labels=last.map(r=>new Date(r.finished*1000).toLocaleDateString());
@@ -479,7 +489,7 @@ async function renderRunChart(){
 /* ----------------------------------------------------------------- stacks */
 async function loadStacks(){
  const tb=$('stackRows');
- tb.innerHTML='<tr><td colspan=6 class="empty">Loading…</td></tr>';
+ tb.innerHTML='<tr><td colspan=6 class="empty">Loadingâ€¦</td></tr>';
  try{
   const s=await api('/api/stacks');
   $('stackCheckInfo').textContent=s.checked_at?('checked '+ago(s.checked_at)):'no check data yet';
@@ -530,7 +540,7 @@ async function redeployStack(id,name){
 let modalStackId=null;
 async function openStack(name,focusSvc,focusSvcName){
  $('modalBg').classList.add('open');$('mTitle').textContent=name||'Stack';
- $('mBody').innerHTML='<div class="empty">loading…</div>';$('mCompose').textContent='';
+ $('mBody').innerHTML='<div class="empty">loadingâ€¦</div>';$('mCompose').textContent='';
  try{
   let id;
   if(name){const st=await api('/api/stacks');const meta=st.stacks.find(x=>x.name===name);
@@ -573,7 +583,7 @@ async function openStack(name,focusSvc,focusSvcName){
       if(!confirm(`Tag "${typed}" not found in registry tag list. Deploy anyway?`))return;
      }
     }catch(_){}
-    btn.disabled=true;btn.textContent='Deploying…';
+    btn.disabled=true;btn.textContent='Deployingâ€¦';
     try{await api(`/api/stacks/${id}/image`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({service:svc,image:val})});
      toast(`${svc} -> ${val} deployed`,'ok');loadStacks();refresh();
@@ -582,7 +592,7 @@ async function openStack(name,focusSvc,focusSvcName){
    };
    const tagsBtn=document.createElement('button');tagsBtn.className='btn sm sec';tagsBtn.textContent='Show available tags';
    tagsBtn.onclick=async()=>{
-    tagsBtn.disabled=true;tagsBtn.textContent='Loading…';
+    tagsBtn.disabled=true;tagsBtn.textContent='Loadingâ€¦';
     try{
      const v=await api('/api/versions?image='+encodeURIComponent(img));
      info.innerHTML='';
@@ -611,14 +621,15 @@ $('modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
 /* ---------------------------------------------------------------- history */
 async function loadHistory(){
  const tb=$('histRows');
- tb.innerHTML='<tr><td colspan=7 class="empty">Loading…</td></tr>';
+ tb.innerHTML='<tr><td colspan=7 class="empty">Loadingâ€¦</td></tr>';
  try{
-  const h=await api('/api/history');
+  const hr=await api('/api/history');
+  const h=hr.history||[];
   const okN=h.filter(r=>r.success).length;
-  $('hRate').textContent=h.length?Math.round(okN/h.length*100)+'%':'–';
+  $('hRate').textContent=h.length?Math.round(okN/h.length*100)+'%':'â€“';
   const full=h.filter(r=>r.kind==='full');
   const durs=full.map(r=>r.duration_s).filter(x=>x!=null);
-  $('hDur').textContent=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length)+'s':'–';
+  $('hDur').textContent=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length)+'s':'â€“';
   if(!h.length){tb.innerHTML='<tr><td colspan=7 class="empty">No runs yet.</td></tr>'}
   else{
    tb.innerHTML='';
@@ -650,7 +661,7 @@ async function loadHistory(){
 }
 async function showRunLog(id,live=false){
  if(currentTab()!=='history')showTab('history');
- const p=$('runLog');p.style.display='block';p.textContent='loading…';
+ const p=$('runLog');p.style.display='block';p.textContent='loadingâ€¦';
  p.scrollIntoView({behavior:'smooth',block:'nearest'});
  try{p.textContent=await (await fetch('/api/runs/'+encodeURIComponent(id)+'/log')).text()}
  catch(e){p.textContent=e.message}
@@ -674,7 +685,7 @@ async function loadSettings(){
   // server time + tz
   try{
    const st=await api('/api/status');
-   $('sServerTime').textContent=st.scheduler.server_time_local||'–';
+   $('sServerTime').textContent=st.scheduler.server_time_local||'â€“';
    $('sServerTz').textContent=st.scheduler.server_tz||'';
   }catch(_){}
  }catch(e){toast(e.message,'err')}
@@ -690,7 +701,7 @@ $('sMode').onchange=toggleScheduleMode;
 /* endpoint scan: list Portainer endpoints, let user pick one */
 $('btnScan').onclick=async()=>{
  const res=$('scanResult');
- res.style.display='block';res.textContent='scanning…';
+ res.style.display='block';res.textContent='scanningâ€¦';
  try{
   const u=$('sUrl').value.trim();
   let q='';
@@ -701,7 +712,7 @@ $('btnScan').onclick=async()=>{
   const box=document.createElement('div');box.className='tag-sel';
   r.endpoints.forEach(e=>{
    const b=document.createElement('button');
-   b.textContent=`${e.name} (ID ${e.id}${e.type===1?' · local':''})`;
+   b.textContent=`${e.name} (ID ${e.id}${e.type===1?' Â· local':''})`;
    b.onclick=()=>{$('sEid').value=e.id;$('scanResult').style.display='none'};
    box.appendChild(b);
   });
@@ -737,14 +748,14 @@ $('btnSave').onclick=async()=>{
  }catch(e){toast(e.message,'err')}
 };
 $('btnTest').onclick=async()=>{
- $('testResult').textContent='testing…';
+ $('testResult').textContent='testingâ€¦';
  try{
   const body={portainer_url:$('sUrl').value.trim()};
   const key=$('sKey').value.trim();
   if(key&&key!=='***')body.portainer_api_key=key;
   const r=await api('/api/test',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)});
-  $('testResult').textContent=`OK - Portainer ${r.version} · endpoint ${r.endpoint_id}`;
+  $('testResult').textContent=`OK - Portainer ${r.version} Â· endpoint ${r.endpoint_id}`;
  }catch(e){$('testResult').textContent='FAILED: '+e.message}
 };
 $('btnPrune').onclick=async()=>{
