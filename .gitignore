@@ -5,6 +5,7 @@ logs/
 backups/
 *.log
 *.lock
+DEPLOY_LOG.md
 
 # Python
 __pycache__/

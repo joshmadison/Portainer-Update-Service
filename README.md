@@ -96,13 +96,9 @@ needed in this app's stack:
       - /var/run/docker.sock:/var/run/docker.sock             # needs the daemon
 ```
 
-Then in Settings:
-
-1. Set **Portainer compose dir** to `/host-portainer`
-2. Enable **Include Portainer updates**
-3. Hit **Check compose mount** to verify everything is wired up
-
-Every full update run then finishes with a Portainer self-update
+Then in Settings, enable **Include Portainer updates** and hit **Check
+compose mount** to verify everything is wired up. Every full update run
+then finishes with a Portainer self-update
 (`docker compose pull && docker compose up -d` in that directory).
 
 ## Environment variables (reference)
@@ -127,7 +123,6 @@ Every full update run then finishes with a Portainer self-update
 | `PUS_KEEP_BACKUPS` | 5 | How many Portainer backups to keep |
 | `PUS_CHECK_CACHE_MINUTES` | 30 | Registry result cache TTL |
 | `PUS_INCLUDE_PORTAINER` | false | Also update Portainer itself |
-| `PUS_PORTAINER_COMPOSE_DIR` | — | Container path of Portainer's compose dir (e.g. `/host-portainer`) |
 
 Env vars override UI settings. Recommended: configure everything in the UI
 and keep the env minimal.

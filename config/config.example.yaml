@@ -18,9 +18,11 @@ tls_verify: false
 max_parallel_deploys: 3
 deploy_wait_time: 300
 
-# Portainer self-update: host path to Portainer's own docker-compose.yml.
-# Empty = self-update skipped.
-portainer_compose_dir: ""
+# Portainer self-update: enable "Include Portainer updates" in Settings to
+# have every full update run also update Portainer itself. Requires
+# Portainer's compose dir mounted read-only at /host-portainer plus the
+# docker socket (see README).
+include_portainer: false
 
 # Registry check result cache (minutes) - respects registry rate limits
 check_cache_minutes: 30

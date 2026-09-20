@@ -36,15 +36,13 @@ DEFAULTS = {
     "deploy_wait_time": 300,         # seconds to wait for containers to become ready
     "keep_backups": 5,
     "backup_dir": str(DATA_DIR / "backups"),
-    "portainer_compose_dir": "",     # container path of Portainer's own compose dir
-                                      # (self-update: compose pull/up in it)
     "check_cache_minutes": 30,       # docker hub result cache TTL
     "listen_host": "127.0.0.1",      # safe default: localhost only
     "listen_port": 8090,
     "auth_token": "",                # if set: mutating API calls need Bearer token
     "notify_webhook": "",            # optional POST target for failure notifications
     "include_portainer": False,      # true = also update Portainer itself
-                                      # (compose pull/up in portainer_compose_dir)
+                                      # (compose pull/up in /host-portainer)
     "repairs": {
         "enabled": True,
         # optional user-defined repair rules (see config.example.yaml);
@@ -106,11 +104,15 @@ def validate(key: str, value):
         if v and not re.match(r"^https?://", v):
             raise ConfigError(f"{key} must start with http:// or https://")
         return v
-    if key in ("portainer_api_key", "portainer_compose_dir", "auth_token"):
+    if key in ("portainer_api_key", "auth_token"):
         return str(value or "").strip()
     if key == "include_portainer":
         if not isinstance(value, bool):
             raise ConfigError("include_portainer must be true/false")
+        return value
+    if key == "repairs_enabled":
+        if not isinstance(value, bool):
+            raise ConfigError("repairs_enabled must be true/false")
         return value
     raise ConfigError(f"unknown setting: {key}")
 

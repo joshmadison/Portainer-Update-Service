@@ -233,11 +233,6 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
     <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
     <label class="f" style="margin-top:14px"><input type="checkbox" id="sIncludePortainer"> <b>Include Portainer updates</b></label>
-    <div style="color:var(--mut);font-size:12px">When checked, every full update run also updates Portainer itself at the end
-      (<span class="mono">docker compose pull &amp;&amp; up -d</span> in its compose dir — Portainer is never a Portainer stack).
-      Requires the compose-dir + docker-socket mounts in this app's stack.</div>
-    <label class="f">Portainer compose dir (container path where Portainer's docker-compose.yml is mounted)</label>
-    <input type="text" id="sCompose" placeholder="e.g. /host-portainer (mount: /path/on/host:/host-portainer:ro)">
     <div class="row" style="margin-top:8px">
       <button class="btn sec sm" id="btnMountCheck">Check compose mount</button>
       <span class="mono" id="mountCheckResult"></span>
@@ -684,7 +679,7 @@ async function loadSettings(){
   $('sEid').value=s.portainer_endpoint_id??'';$('sTls').checked=!!s.tls_verify;
   $('sMode').value=s.update_schedule_mode||'interval';$('sTime').value=s.update_schedule_time||'03:30';
   $('sDay').value=s.update_schedule_day??0;$('sPar').value=s.max_parallel_deploys??3;
-  $('sWait').value=s.deploy_wait_time??300;$('sCompose').value=s.portainer_compose_dir||'';
+  $('sWait').value=s.deploy_wait_time??300;
   $('sIncludePortainer').checked=!!s.include_portainer;
   $('sCache').value=s.check_cache_minutes??30;$('sKeep').value=s.keep_backups??5;
   $('sHook').value=s.notify_webhook||'';$('sRep').checked=!!(s.repairs_enabled??(s.repairs&&s.repairs.enabled));
@@ -734,7 +729,7 @@ $('btnSave').onclick=async()=>{
   const body={portainer_url:$('sUrl').value.trim(),
    max_parallel_deploys:+$('sPar').value||3,deploy_wait_time:+$('sWait').value||300,
    keep_backups:+$('sKeep').value||5,
-    portainer_compose_dir:$('sCompose').value.trim(),check_cache_minutes:+$('sCache').value||30,
+    check_cache_minutes:+$('sCache').value||30,
     notify_webhook:$('sHook').value.trim(),
     tls_verify:$('sTls').checked,include_portainer:$('sIncludePortainer').checked,
     repairs_enabled:$('sRep').checked};

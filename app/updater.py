@@ -128,18 +128,16 @@ def preflight_checks(client: Portainer, log) -> tuple:
             log(f"[OK] Root FS usage: {usage}%")
 
     # Portainer compose dir (only needed for self-update)
-    compose_dir = get("portainer_compose_dir", "")
-    if compose_dir:
-        from pathlib import Path
-        if not Path(compose_dir).exists():
-            log(f"[WARN] portainer_compose_dir is set but NOT MOUNTED into "
-                f"the container: {compose_dir} does not exist here. Add the "
-                f"volume mount to the stack and update it.")
-        elif (Path(compose_dir) / "docker-compose.yml").exists():
-            log("[OK] Portainer compose file found")
-        else:
-            log(f"[WARN] no docker-compose.yml in {compose_dir} - check the "
-                f"mount points at Portainer's compose dir")
+    from pathlib import Path
+    compose_dir = "/host-portainer"
+    if not Path(compose_dir).exists():
+        log(f"[INFO] {compose_dir} not mounted - Portainer self-update "
+            f"unavailable. Add the volume mount to the stack if wanted.")
+    elif (Path(compose_dir) / "docker-compose.yml").exists():
+        log("[OK] Portainer compose file found")
+    else:
+        log(f"[WARN] no docker-compose.yml in {compose_dir} - check the "
+            f"mount points at Portainer's compose dir")
     return ok, []
 
 
@@ -405,7 +403,7 @@ def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
     log("Portainer self-update: compose-CLI mode (plain compose project)...")
     if not (Path(compose_dir) / "docker-compose.yml").exists():
         log(f"[ERROR] no docker-compose.yml in {compose_dir} - cannot "
-            f"self-update. Fix portainer_compose_dir or the mount.")
+            f"self-update. Check the mount.")
         return False
     try:
         p = subprocess.run(["docker", "compose", "pull"], capture_output=True,
@@ -433,22 +431,15 @@ def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
 def update_portainer(client, eid, log) -> bool:
     """Update Portainer itself (if include_portainer=true).
 
-    Portainer is by definition NEVER a Portainer stack (it manages the other
-    stacks, it can't be its own client). Self-update therefore runs
+    Portainer runs outside Portainer (plain compose), so self-update runs
     `docker compose pull && docker compose up -d` inside Portainer's own
-    compose dir, which must be mounted into this container (read-only is
-    sufficient) along with the docker socket.
+    compose dir, mounted read-only at /host-portainer, along with the
+    docker socket.
     """
     if not get("include_portainer", False):
         log("[INFO] Portainer self-update disabled (include_portainer=false).")
         return True
-    compose_dir = (get("portainer_compose_dir", "") or "").strip()
-    if not compose_dir:
-        log("[WARN] include_portainer=true but no portainer_compose_dir set "
-            "- cannot self-update Portainer. Set 'Portainer compose dir' "
-            "in Settings (and mount it read-only into this container).")
-        return False
-    return _update_portainer_compose_cli(compose_dir, log)
+    return _update_portainer_compose_cli("/host-portainer", log)
 
 
 # ---------------------------------------------------------- reconciliation

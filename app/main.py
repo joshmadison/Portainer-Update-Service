@@ -164,19 +164,19 @@ def api_endpoints():
 
 @app.route("/api/portainer_mount_check")
 def api_portainer_mount_check():
-    """Settings 'Check mount' button: verify Portainer's compose dir is
-    mounted into this container and contains a docker-compose.yml."""
+    """Settings 'Check compose mount' button: verify Portainer's compose dir
+    is mounted into this container (at /host-portainer) and contains a
+    docker-compose.yml."""
     from pathlib import Path
-    compose_dir = (get("portainer_compose_dir", "") or "").strip()
-    if not compose_dir:
-        return jsonify({"ok": False, "state": "not_set",
-                        "message": "No 'Portainer compose dir' set in Settings."})
+    compose_dir = "/host-portainer"
     d = Path(compose_dir)
     if not d.exists():
         return jsonify({"ok": False, "state": "not_mounted",
                         "message": f"'{compose_dir}' does not exist inside this "
                                    "container - the volume mount is missing. "
-                                   "Add it to the stack and redeploy."})
+                                   "Add it to the stack (host path on the left, "
+                                   "container path on the right of the ':') and "
+                                   "redeploy."})
     yml = d / "docker-compose.yml"
     if not yml.exists():
         return jsonify({"ok": False, "state": "no_compose_file",
@@ -195,8 +195,7 @@ def api_portainer_mount_check():
         image = m.group(1)
     return jsonify({"ok": True, "state": "ok", "path": compose_dir,
                     "image": image,
-                    "message": f"Compose file found in '{compose_dir}'"
-                               + (f" (image: {image})" if image else "")
+                    "message": f"Compose file found (image: {image})"
                                + " - Portainer self-update will work."})
 
 
@@ -498,7 +497,7 @@ def api_settings_post():
                "update_interval_hours", "update_schedule_mode",
                "update_schedule_time", "update_schedule_day",
                "tls_verify", "max_parallel_deploys",
-               "deploy_wait_time", "keep_backups", "portainer_compose_dir",
+               "deploy_wait_time", "keep_backups",
                "check_cache_minutes", "listen_port", "auth_token",
                "notify_webhook", "include_portainer",
                "repairs_enabled"}
