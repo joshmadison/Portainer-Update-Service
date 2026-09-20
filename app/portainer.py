@@ -124,6 +124,11 @@ class Portainer:
     def networks(self, eid=None):
         return self._docker("GET", "/networks", eid).json()
 
+    def network_inspect(self, name_or_id, eid=None):
+        return self._docker("GET",
+                            f"/networks/{quote(name_or_id, safe='')}",
+                            eid).json()
+
     def connect_network(self, network_id, container_id, eid=None):
         return self._docker("POST", f"/networks/{network_id}/connect", eid,
                             json={"Container": container_id})

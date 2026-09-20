@@ -30,18 +30,29 @@ from .portainer import Portainer, PortainerError
 
 
 # --------------------------------------------------------------------- helpers
-def _cli(args, timeout=600):
-    """Run a local docker CLI command (prune, backups). Returns (rc, stdout)."""
-    docker = shutil.which("docker")
+def _run_cmd(args, timeout=600, cwd=None):
+    """Run a local CLI command, capturing output robustly.
+
+    text=True decodes with the process locale - docker/compose output with
+    non-UTF8 bytes can raise UnicodeDecodeError (an uncaught ValueError).
+    errors='replace' + a broad except guarantee: a CLI failure is ALWAYS a
+    returncode, never an exception escaping the caller."""
+    docker = shutil.which(args[0])
     if not docker:
-        return 1, "docker CLI not found"
+        return 1, f"{args[0]} CLI not found"
     try:
-        p = subprocess.run([docker, *args], capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run([docker, *args[1:]], capture_output=True, text=True,
+                           errors="replace", timeout=timeout, cwd=cwd)
         return p.returncode, (p.stdout + p.stderr).strip()
     except subprocess.TimeoutExpired:
         return 1, "command timed out"
-    except OSError as e:
+    except (OSError, ValueError) as e:
         return 1, str(e)
+
+
+def _cli(args, timeout=600):
+    """Run a local docker CLI command (prune, backups). Returns (rc, stdout)."""
+    return _run_cmd(["docker", *args], timeout=timeout)
 
 
 def _df_usage(path="/"):
@@ -474,10 +485,10 @@ def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
         return False
     try:
         p = subprocess.run(["docker", "compose", "pull"], capture_output=True,
-                           text=True, timeout=900, cwd=compose_dir)
+                           text=True, errors="replace", timeout=900, cwd=compose_dir)
         up = subprocess.run(["docker", "compose", "up", "-d"], capture_output=True,
-                            text=True, timeout=900, cwd=compose_dir)
-    except (OSError, subprocess.SubprocessError) as e:
+                            text=True, errors="replace", timeout=900, cwd=compose_dir)
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
         log(f"[ERROR] Portainer self-update failed: {e}")
         return False
     out = (p.stdout + p.stderr + up.stdout + up.stderr).strip()
@@ -547,14 +558,43 @@ def reconciliation_sweep(client, eid, stacks, log) -> bool:
 
 
 # ------------------------------------------------- network integrity repairs
+def _default_bridge_gateway(client, eid, log) -> str:
+    """Gateway of the default bridge network (docker0) - the address Docker
+    resolves 'host-gateway' to at container creation. This is the ONLY
+    correct reference for extra_hosts host-gateway checks: comparing
+    against the container's own (custom) network gateways produces false
+    positives, because a custom network's gateway is subnet-specific and
+    almost never equals docker0's."""
+    try:
+        insp = client.network_inspect("bridge", eid)
+        for cfg in insp.get("IPAM", {}).get("Config") or []:
+            gw = cfg.get("Gateway")
+            if gw:
+                return gw
+    except (PortainerError, AttributeError) as e:
+        log(f"[WARN] gateway check: default bridge inspect failed ({e}) - "
+            f"host-gateway checks skipped.")
+    return ""
+
+
 def _repair_stale_gateways(client, eid, log) -> bool:
     """GENERIC repair (no config needed): extra_hosts 'host.docker.internal' /
     'host-gateway' entries are resolved at container CREATION time and baked
-    into /etc/hosts. If the container's network was recreated afterwards (e.g.
-    by a prune), the running container keeps dialing the OLD gateway IP ->
-    connection failures to host-published targets. Detection: compare every
-    running container's gateway mapping against its CURRENT network gateways.
+    into /etc/hosts - Docker resolves 'host-gateway' to the DEFAULT BRIDGE
+    (docker0) gateway at that moment. It is NOT the container's own network
+    gateway (custom network gateways are subnet-specific). If the docker0
+    bridge was later recreated with a different subnet (daemon restart,
+    address pool changes), the running container keeps dialing the OLD
+    gateway IP -> connection failures to host-published targets.
+
+    Detection: compare each running container's host-gateway mapping against
+    the CURRENT default-bridge gateway (NOT the container's own networks -
+    that comparison is always false for containers not on docker0).
     Fix: redeploy the owning compose stack (re-evaluates host-gateway)."""
+    host_gw = _default_bridge_gateway(client, eid, log)
+    if not host_gw:
+        log("[INFO] no default bridge gateway - host-gateway check skipped.")
+        return True
     if not shutil.which("docker"):
         # docker CLI missing (container mode): replicate the check via the
         # Portainer docker-proxy API - inspect every running container
@@ -583,18 +623,15 @@ def _repair_stale_gateways(client, eid, log) -> bool:
                 alias, _, ip = (h or "").partition(":")
                 if alias in ("host.docker.internal", "host-gateway") and ip:
                     mapped.append(ip)
-            gateways = [n.get("Gateway") for n in
-                        (insp.get("NetworkSettings", {}).get("Networks") or {}).values()]
-            gateways = [g for g in gateways if g]
-            if not mapped or not gateways:
+            if not mapped:
                 continue
             checked += 1
-            stale = [ip for ip in mapped if ip not in gateways]
+            stale = [ip for ip in mapped if ip != host_gw]
             if not stale:
-                log(f"[OK] {cname}: host-gateway ({mapped[0]}) matches current gateway.")
+                log(f"[OK] {cname}: host-gateway ({mapped[0]}) matches docker0 ({host_gw}).")
                 continue
             if not project:
-                log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs {gateways}) "
+                log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs docker0 {host_gw}) "
                     f"but no compose project label - cannot auto-recreate.")
                 ok = False
                 continue
@@ -627,7 +664,6 @@ def _repair_stale_gateways(client, eid, log) -> bool:
     # index on missing map keys errors out - guard with default
     rc, out = _cli(["inspect", "--format",
                     "{{.Name}}|{{index .Config.Labels \"com.docker.compose.project\"}}|"
-                    "{{range $k, $v := .NetworkSettings.Networks}}{{$v.Gateway}} {{end}}|"
                     "{{range .HostConfig.ExtraHosts}}{{.}} {{end}}", *ids])
     if rc != 0:
         log(f"[WARN] container inspect failed, skipping gateway check: {out[:150]}")
@@ -635,10 +671,9 @@ def _repair_stale_gateways(client, eid, log) -> bool:
 
     ok = True
     for line in out.splitlines():
-        parts = (line.split("|") + ["", "", "", ""])[:4]
-        cname, project, gw_str, hosts_str = parts
+        parts = (line.split("|") + ["", "", ""])[:3]
+        cname, project, hosts_str = parts
         cname = cname.lstrip("/")
-        gateways = [g for g in gw_str.split() if g]
         # extra_hosts entries look like "host.docker.internal:192.168.1.5"
         mapped = []
         for h in hosts_str.split():
@@ -646,18 +681,18 @@ def _repair_stale_gateways(client, eid, log) -> bool:
                 alias, ip = h.split(":", 1)
                 if alias in ("host.docker.internal", "host-gateway"):
                     mapped.append(ip)
-        if not mapped or not gateways:
+        if not mapped:
             continue
-        stale = [ip for ip in mapped if ip not in gateways]
+        stale = [ip for ip in mapped if ip != host_gw]
         if not stale:
-            log(f"[OK] {cname}: host-gateway mapping ({mapped[0]}) matches a current gateway.")
+            log(f"[OK] {cname}: host-gateway mapping ({mapped[0]}) matches docker0 ({host_gw}).")
             continue
         if not project:
-            log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs gateways {gateways}) "
+            log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs docker0 {host_gw}) "
                 f"but no compose project label - cannot auto-recreate. Manual recreate needed.")
             ok = False
             continue
-        log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs gateways {gateways}).")
+        log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs docker0 {host_gw}).")
         # skip if the whole stack is intentionally stopped
         rcn, running_out = _cli(["ps", "-q", "--filter", f"label=com.docker.compose.project={project}"])
         if rcn == 0 and not running_out.strip():
