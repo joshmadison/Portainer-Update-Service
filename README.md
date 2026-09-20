@@ -7,6 +7,8 @@ Point it at your Portainer, and it checks all your stacks for newer images,
 updates them for you, cleans up after itself, and reports what it did.
 Runs on your own machine. No cloud, no accounts, no telemetry.
 
+![Dashboard screenshot](Screenshot_Dashboard.png)
+
 ## Features
 
 - **Dashboard** — update status, last run, next scheduled run at a glance
