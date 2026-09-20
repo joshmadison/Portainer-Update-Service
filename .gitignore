@@ -11,3 +11,4 @@ DEPLOY_LOG.md
 __pycache__/
 *.pyc
 .venv/
+deploy/
