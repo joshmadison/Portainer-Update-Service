@@ -448,6 +448,8 @@ def api_settings_get():
     # never expose the secrets themselves
     cfg["portainer_api_key"] = "***" if cfg.get("portainer_api_key") else ""
     cfg["auth_token"] = "***" if cfg.get("auth_token") else ""
+    # flat alias mirroring cfg["repairs"]["enabled"] (UI checkbox reads this)
+    cfg["repairs_enabled"] = bool(cfg.get("repairs", {}).get("enabled", True))
     return jsonify(cfg)
 
 
@@ -460,7 +462,8 @@ def api_settings_post():
                "tls_verify", "max_parallel_deploys",
                "deploy_wait_time", "keep_backups", "portainer_compose_dir",
                "check_cache_minutes", "listen_port", "auth_token",
-               "notify_webhook", "self_stack_name", "include_portainer"}
+               "notify_webhook", "self_stack_name", "include_portainer",
+               "repairs_enabled"}
     # two-pass: validate EVERYTHING first, then apply - a bad key must never
     # leave earlier keys mutated in memory (memory/disk divergence)
     from .config import validate

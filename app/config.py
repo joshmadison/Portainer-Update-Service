@@ -132,7 +132,8 @@ def load(force: bool = False) -> dict:
         if CONFIG_FILE.exists():
             with open(CONFIG_FILE, encoding="utf-8") as f:
                 user = yaml.safe_load(f) or {}
-            cfg.update({k: v for k, v in user.items() if k != "repairs"})
+            cfg.update({k: v for k, v in user.items()
+                        if k not in ("repairs", "repairs_enabled")})
             cfg["repairs"] = {**DEFAULTS["repairs"], **(user.get("repairs") or {})}
         # env overrides (container deployments): PUS_PORTAINER_URL, PUS_LISTEN_HOST, ...
         for key in list(cfg.keys()):
@@ -144,8 +145,28 @@ def load(force: bool = False) -> dict:
                     cfg[key] = yaml.safe_load(env_val)  # coerces true/false/ints/null
                 except yaml.YAMLError:
                     cfg[key] = env_val
+        # repairs_enabled: flat UI/API alias for cfg["repairs"]["enabled"]
+        # (the nested dict is config.yaml-only; the UI toggles the flat key)
+        env_rep = os.environ.get(ENV_PREFIX + "REPAIRS_ENABLED")
+        if env_rep not in (None, ""):
+            cfg["repairs"]["enabled"] = bool(env_rep)
+        elif "repairs_enabled" in user_vars(CONFIG_FILE):
+            cfg["repairs"]["enabled"] = bool(user_vars(CONFIG_FILE)["repairs_enabled"])
+        # expose the flat alias so /api/settings GET + UI checkbox stay in sync
+        cfg["repairs_enabled"] = bool(cfg["repairs"].get("enabled", True))
         _cfg = cfg
         return cfg
+
+
+def user_vars(path: Path) -> dict:
+    """Raw user-supplied keys from config.yaml (no defaults merged)."""
+    if not path.exists():
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
 
 
 def save() -> None:
@@ -165,6 +186,13 @@ def get(key: str, default=None):
 def set(key: str, value) -> None:
     """Validate then set (does NOT save; call save() explicitly)."""
     load()
+    if key == "repairs_enabled":
+        if not isinstance(value, bool):
+            raise ConfigError("repairs_enabled must be true/false")
+        with _lock:
+            _cfg["repairs_enabled"] = value
+            _cfg["repairs"] = {**_cfg.get("repairs", {}), "enabled": value}
+        return
     validated = validate(key, value)
     with _lock:
         _cfg[key] = validated

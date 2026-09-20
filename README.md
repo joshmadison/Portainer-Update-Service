@@ -101,16 +101,22 @@ services:
 No docker socket needed — the app talks exclusively to the Portainer API.
 
 **Optional — Portainer self-update via compose-dir fallback:** only needed
-when your Portainer is NOT deployed as a Portainer stack (e.g. started with
-plain `docker run`). If it IS a Portainer stack, use the `include_portainer`
-setting instead (see "Updating Portainer itself" below):
+when your Portainer is NOT deployed as a Portainer stack (the normal case —
+Portainer manages the other stacks, it can't be its own client; e.g. started
+with plain `docker compose up` or `docker run`). If it IS a Portainer stack,
+use the `include_portainer` setting instead (see "Updating Portainer itself"
+below). Mount Portainer's compose dir READ-ONLY:
 
 ```yaml
     volumes:
-      - - /path/to/portainer/docker-compose:/host-portainer:ro  # Portainer's own compose dir
+      - /path/to/portainer/docker-compose:/host-portainer:ro  # Portainer's own compose dir
+      - /var/run/docker.sock:/var/run/docker.sock             # compose pull/up needs the daemon
 ```
 
-(with `portainer_compose_dir` = `/host-portainer` in Settings)
+(with `portainer_compose_dir` = `/host-portainer` in Settings — the app then
+self-updates Portainer with `docker compose pull && docker compose up -d`
+in that directory; the `:ro` mount is sufficient, compose only reads the
+yml and talks to the daemon)
 
 Adjust: host port (`8090:8090`), data/config paths, and — if your Portainer
 runs as a container — join the network your Portainer is on (so the app can
@@ -148,7 +154,8 @@ networks:
 | `PUS_KEEP_BACKUPS` | 5 | How many Portainer backups to keep |
 | `PUS_CHECK_CACHE_MINUTES` | 30 | Registry result cache TTL |
 | `PUS_SELF_STACK_NAME` | auto | Portainer stack name of this app (self-update) |
-| `PUS_INCLUDE_PORTAINER` | false | Also update Portainer itself (last step) |
+| `PUS_INCLUDE_PORTAINER` | false | Mode A: also update Portainer as a Portainer stack (last step) |
+| `PUS_PORTAINER_COMPOSE_DIR` | — | Mode B: container path of Portainer's compose dir (e.g. `/host-portainer`) for plain-compose setups |
 
 Env vars **override** UI settings — configure everything in the UI and leave
 the env minimal (recommended), or set them here to lock values in. Any
@@ -157,7 +164,10 @@ use `config/config.yaml` for the repair-rules section instead.
 
 ## Updating Portainer itself (optional)
 
-The app can update Portainer as the last step of every update run:
+Portainer is by definition **never a Portainer stack** unless you deploy it
+as one — the app supports both setups, auto-selected by which setting you use:
+
+**Mode A — Portainer deployed as a Portainer stack** (`include_portainer`):
 
 1. Deploy the app **as a Portainer stack** (see above) — it detects its own
    stack and updates itself last, after finalizing its history
@@ -166,12 +176,20 @@ The app can update Portainer as the last step of every update run:
 3. Done — every update run then pulls the newest Portainer image and
    redeploys it through the Portainer API
 
-**Fallback for non-stack setups:** if your Portainer runs from a compose file
-on the host (NOT as a Portainer stack), mount that folder into the container
-(`- /path/to/portainer-compose:/host-portainer:ro`) and set
-**Settings → "Portainer compose dir"** to `/host-portainer`. The app then
-updates Portainer with `docker compose pull && up -d` in that directory
-(requires the docker socket mount from the compose template).
+**Mode B — Portainer as a plain compose project** (`portainer_compose_dir`,
+the normal setup): Portainer manages the other stacks, so it can't be its
+own client. Mount Portainer's compose dir READ-ONLY plus the docker socket:
+
+```yaml
+    volumes:
+      - /path/to/portainer-compose:/host-portainer:ro  # Portainer's own compose dir
+      - /var/run/docker.sock:/var/run/docker.sock      # compose pull/up needs the daemon
+```
+
+Set **Settings → "Portainer compose dir"** to `/host-portainer`. The app
+then updates Portainer with `docker compose pull && docker compose up -d`
+in that directory (the `:ro` mount is sufficient — compose only reads the
+yml, the daemon does the work; the image ships the compose plugin).
 
 ## Using the app
 

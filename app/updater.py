@@ -380,14 +380,58 @@ def wait_portainer_ready(client, log, timeout_s=90) -> bool:
     return False
 
 
-def update_portainer(client, eid, log) -> bool:
-    """Redeploy the Portainer stack through the Portainer API (like any other
-    stack). Enabled by the 'include_portainer' setting + 'self_stack_name'.
+def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
+    """Mode B: Portainer runs as a plain compose project (NOT a Portainer
+    stack - which is the normal case: Portainer manages the other stacks,
+    it can't be its own client). `docker compose pull && up -d` in the
+    mounted compose dir, docker socket required. Read-only dir mount is
+    sufficient: compose only reads the yml, the daemon does the rest."""
+    log("Portainer self-update: compose-CLI mode (plain compose project)...")
+    if not (Path(compose_dir) / "docker-compose.yml").exists():
+        log(f"[ERROR] no docker-compose.yml in {compose_dir} - cannot "
+            f"self-update. Fix portainer_compose_dir or the mount.")
+        return False
+    try:
+        p = subprocess.run(["docker", "compose", "pull"], capture_output=True,
+                           text=True, timeout=900, cwd=compose_dir)
+        up = subprocess.run(["docker", "compose", "up", "-d"], capture_output=True,
+                            text=True, timeout=900, cwd=compose_dir)
+    except (OSError, subprocess.SubprocessError) as e:
+        log(f"[ERROR] Portainer self-update failed: {e}")
+        return False
+    out = (p.stdout + p.stderr + up.stdout + up.stderr).strip()
+    if p.returncode != 0 or up.returncode != 0:
+        log(f"[ERROR] Portainer self-update failed: {out[:300]}")
+        return False
+    # compose up returned - Portainer restarts: wait for the API
+    time.sleep(5)
+    rc, out3 = _cli(["ps", "-q", "--filter", "name=^portainer$",
+                     "--filter", "status=running"])
+    if rc == 0 and out3:
+        log("[OK] Portainer self-update completed.")
+        return True
+    log("[ERROR] compose up reported success but Portainer is not running.")
+    return False
 
-    The engine calls this LAST (after run history is finalized) because the
-    API may go down mid-redeploy; wait_portainer_ready() guards the aftermath.
+
+def update_portainer(client, eid, log) -> bool:
+    """Update Portainer itself. Two modes, auto-selected:
+
+    Mode A (include_portainer=true): Portainer runs AS a Portainer stack -
+    redeploy it through the Portainer API (stack_file + update_stack), like
+    any other stack. Called LAST (API may go down mid-redeploy).
+
+    Mode B (portainer_compose_dir set): Portainer runs as a PLAIN compose
+    project OUTSIDE Portainer (Portainer is by definition never a Portainer
+    stack in that setup). Run `docker compose pull && up -d` in the mounted
+    dir via the docker socket. Read-only mount of the compose dir is enough:
+    compose talks to the daemon, it never writes to the compose directory.
     """
+    compose_dir = (get("portainer_compose_dir", "") or "").strip()
     if not get("include_portainer", False):
+        if compose_dir:
+            # Mode B - plain-compose Portainer via docker CLI
+            return _update_portainer_compose_cli(compose_dir, log)
         log("[INFO] Portainer self-update disabled (include_portainer=false).")
         return True
     self_names = _self_stack_names(client, eid)

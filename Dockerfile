@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # "docker.io" Debian package is huge (ships the daemon too) and unreliable
 # across debian point releases. Fallback: if both apt sources fail, the app
 # degrades gracefully (prune/backup skipped with a warning) - see updater.
+# docker-compose-plugin: needed for Portainer self-update when Portainer
+# runs as a plain compose project (compose_dir mode) - `docker compose pull/up`.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
     && install -m 0755 -d /etc/apt/keyrings \
@@ -22,9 +24,9 @@ RUN apt-get update \
         https://download.docker.com/linux/debian bookworm stable" \
         > /etc/apt/sources.list.d/docker.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends docker-ce-cli \
+    && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/* \
-    && docker --version
+    && docker --version && docker compose version
 
 COPY app/ app/
 COPY ui/ ui/

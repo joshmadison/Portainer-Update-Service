@@ -1,1405 +1,782 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0f141a">
-  <title>Portainer Update Service</title>
-  <link rel="icon"
-    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230f141a'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%233aa0ff'/%3E%3C/svg%3E">
-  <style>
-    :root {
-      --bg: #0f141a;
-      --panel: #161d26;
-      --panel2: #1c242f;
-      --line: #2a3441;
-      --line-strong: #3a4656;
-      --txt: #d7e0ea;
-      --mut: #8a97a8;
-      --acc: #3aa0ff;
-      --acc-btn: #2f7fd6;
-      --ok: #38c172;
-      --warn: #e8a33d;
-      --err: #e35d5d;
-      --err-btn: #d94b4b;
-      --ok-bg: rgba(56, 193, 114, .15);
-      --warn-bg: rgba(232, 163, 61, .15);
-      --err-bg: rgba(227, 93, 93, .15);
-      --mut-bg: rgba(138, 151, 168, .15);
-      --acc-bg: rgba(58, 160, 255, .15);
-      --radius: 10px;
-      color-scheme: dark;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--txt);
-      font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif
-    }
-
-    a {
-      color: var(--acc);
-      text-decoration: none
-    }
-
-    ::-webkit-scrollbar {
-      width: 10px;
-      height: 10px
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: var(--line);
-      border-radius: 5px
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent
-    }
-
-    button:focus-visible,
-    a:focus-visible,
-    input:focus-visible,
-    select:focus-visible {
-      outline: 2px solid var(--acc);
-      outline-offset: 2px;
-      border-radius: 4px
-    }
-
-    header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 12px 16px;
-      padding: 14px 22px;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
-      position: sticky;
-      top: 0;
-      z-index: 5
-    }
-
-    header h1 {
-      font-size: 17px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 10px
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--mut);
-      display: inline-block;
-      flex: none
-    }
-
-    .dot.ok {
-      background: var(--ok)
-    }
-
-    .dot.err {
-      background: var(--err)
-    }
-
-    .dot.run {
-      background: var(--acc);
-      animation: pulse 1s infinite alternate
-    }
-
-    @keyframes pulse {
-      from {
-        opacity: .4
-      }
-
-      to {
-        opacity: 1
-      }
-    }
-
-    @media (prefers-reduced-motion:reduce) {
-      .dot.run {
-        animation: none
-      }
-    }
-
-    nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-left: 12px
-    }
-
-    nav button {
-      background: none;
-      border: 0;
-      color: var(--mut);
-      padding: 7px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background .15s ease, color .15s ease
-    }
-
-    nav button:hover {
-      color: var(--txt);
-      background: rgba(42, 52, 65, .5)
-    }
-
-    nav button.active {
-      background: var(--panel2);
-      color: var(--txt)
-    }
-
-    main {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 22px
-    }
-
-    .grid {
-      display: grid;
-      gap: 14px
-    }
-
-    .cards {
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr))
-    }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 16px
-    }
-
-    .card .lbl {
-      color: var(--mut);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .4px
-    }
-
-    .card .val {
-      font-size: 24px;
-      font-weight: 600;
-      margin-top: 4px;
-      font-variant-numeric: tabular-nums
-    }
-
-    .card .sub {
-      color: var(--mut);
-      font-size: 12px;
-      margin-top: 2px
-    }
-
-    section {
-      margin-top: 18px
-    }
-
-    h2 {
-      font-size: 15px;
-      font-weight: 600;
-      margin-bottom: 10px;
-      color: var(--txt)
-    }
-
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 16px;
-      overflow-x: auto
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13.5px
-    }
-
-    th {
-      color: var(--mut);
-      text-align: left;
-      font-weight: 500;
-      font-size: 12px;
-      text-transform: uppercase;
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--line)
-    }
-
-    td {
-      padding: 9px 10px;
-      border-bottom: 1px solid var(--line);
-      font-variant-numeric: tabular-nums
-    }
-
-    tr:last-child td {
-      border-bottom: 0
-    }
-
-    tbody tr:hover td {
-      background: var(--panel2)
-    }
-
-    th.num,
-    td.num {
-      text-align: right
-    }
-
-    td.mono {
-      font: 12px ui-monospace, Consolas, monospace;
-      color: var(--mut);
-      max-width: 320px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 2px 9px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600
-    }
-
-    .b-ok {
-      background: var(--ok-bg);
-      color: var(--ok)
-    }
-
-    .b-warn {
-      background: var(--warn-bg);
-      color: var(--warn)
-    }
-
-    .b-err {
-      background: var(--err-bg);
-      color: var(--err)
-    }
-
-    .b-mut {
-      background: var(--mut-bg);
-      color: var(--mut)
-    }
-
-    .b-info {
-      background: var(--acc-bg);
-      color: var(--acc)
-    }
-
-    .btn {
-      background: var(--acc-btn);
-      color: #fff;
-      border: 0;
-      padding: 8px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 13.5px;
-      font-weight: 500;
-      transition: background .15s ease, opacity .15s ease
-    }
-
-    .btn:hover {
-      filter: brightness(1.1)
-    }
-
-    .btn:disabled {
-      opacity: .5;
-      cursor: not-allowed
-    }
-
-    .btn.sec {
-      background: var(--panel2);
-      color: var(--txt);
-      border: 1px solid var(--line)
-    }
-
-    .btn.sm {
-      padding: 4px 10px;
-      font-size: 12.5px
-    }
-
-    .btn.danger {
-      background: var(--err-btn)
-    }
-
-    .row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap
-    }
-
-    .spread {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap
-    }
-
-    pre.log {
-      background: #0b0f14;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 14px;
-      font: 12px/1.55 ui-monospace, Consolas, monospace;
-      color: #b9c6d4;
-      overflow: auto;
-      max-height: 420px;
-      white-space: pre-wrap
-    }
-
-    .banner {
-      display: none;
-      align-items: flex-start;
-      gap: 12px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-left: 3px solid var(--acc);
-      border-radius: var(--radius);
-      padding: 12px 16px;
-      margin-bottom: 16px
-    }
-
-    .banner.open {
-      display: flex
-    }
-
-    .banner.warn {
-      border-left-color: var(--warn)
-    }
-
-    .banner.err {
-      border-left-color: var(--err)
-    }
-
-    .banner .b-txt {
-      flex: 1;
-      font-size: 13.5px
-    }
-
-    .banner .b-sub {
-      color: var(--mut);
-      font-size: 12.5px;
-      margin-top: 2px;
-      font-variant-numeric: tabular-nums
-    }
-
-    .modal-bg {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, .6);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 10
-    }
-
-    .modal-bg.open {
-      display: flex
-    }
-
-    .modal {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      width: min(860px, 94vw);
-      max-height: 90vh;
-      overflow: auto;
-      padding: 20px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, .55)
-    }
-
-    .modal-bg.open .modal {
-      animation: pop .16s ease
-    }
-
-    @keyframes pop {
-      from {
-        opacity: 0;
-        transform: translateY(8px) scale(.98)
-      }
-    }
-
-    .modal .spread {
-      position: sticky;
-      top: 0;
-      background: var(--panel);
-      z-index: 1;
-      padding-bottom: 8px
-    }
-
-    .modal h3 {
-      font-size: 16px;
-      margin-bottom: 12px
-    }
-
-    select,
-    input[type=text],
-    input[type=password],
-    input[type=number],
-    input[type=url] {
-      background: var(--panel2);
-      border: 1px solid var(--line);
-      color: var(--txt);
-      padding: 7px 10px;
-      border-radius: 7px;
-      font-size: 13.5px
-    }
-
-    label.f {
-      display: block;
-      color: var(--mut);
-      font-size: 12px;
-      margin: 12px 0 4px
-    }
-
-    input[type=text],
-    input[type=password],
-    input[type=number],
-    input[type=url] {
-      width: 100%
-    }
-
-    .mono {
-      font: 12px ui-monospace, Consolas, monospace;
-      color: var(--mut)
-    }
-
-    .toast {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: var(--panel2);
-      border: 1px solid var(--line);
-      border-left: 3px solid var(--acc);
-      padding: 12px 16px;
-      border-radius: 8px;
-      display: none;
-      z-index: 20;
-      max-width: 380px;
-      animation: tin .18s ease
-    }
-
-    .toast.ok {
-      border-left-color: var(--ok)
-    }
-
-    .toast.err {
-      border-left-color: var(--err)
-    }
-
-    @keyframes tin {
-      from {
-        opacity: 0;
-        transform: translateY(8px)
-      }
-    }
-
-    .kv {
-      display: grid;
-      grid-template-columns: 150px 1fr;
-      gap: 6px;
-      font-size: 13.5px
-    }
-
-    .kv .k {
-      color: var(--mut)
-    }
-
-    .empty {
-      color: var(--mut);
-      text-align: center;
-      padding: 26px
-    }
-
-    .tag-sel {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-top: 8px
-    }
-
-    .tag-sel button {
-      background: var(--panel2);
-      border: 1px solid var(--line);
-      color: var(--txt);
-      border-radius: 6px;
-      padding: 3px 9px;
-      font-size: 12px;
-      cursor: pointer;
-      transition: border-color .15s ease
-    }
-
-    .tag-sel button:hover {
-      border-color: var(--acc)
-    }
-
-    .tag-sel button.cur {
-      border-color: var(--acc);
-      color: var(--acc);
-      background: var(--acc-bg);
-      font-weight: 600
-    }
-
-    .divider {
-      border-top: 1px solid var(--line);
-      margin: 20px 0
-    }
-
-    @media(max-width:640px) {
-      main {
-        padding: 14px
-      }
-
-      header {
-        padding: 12px 14px
-      }
-
-      header h1 {
-        font-size: 16px
-      }
-
-      nav {
-        margin-left: 0
-      }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f141a">
+<title>Portainer Update Service</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230f141a'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%233aa0ff'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0f141a;--panel:#161d26;--panel2:#1c242f;--line:#2a3441;--line-strong:#3a4656;
+  --txt:#d7e0ea;--mut:#8a97a8;--acc:#3aa0ff;--acc-btn:#2f7fd6;
+  --ok:#38c172;--warn:#e8a33d;--err:#e35d5d;--err-btn:#d94b4b;
+  --ok-bg:rgba(56,193,114,.15);--warn-bg:rgba(232,163,61,.15);
+  --err-bg:rgba(227,93,93,.15);--mut-bg:rgba(138,151,168,.15);--acc-bg:rgba(58,160,255,.15);
+  --radius:10px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:var(--acc);text-decoration:none}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+header h1{font-size:17px;font-weight:600;display:flex;align-items:center;gap:10px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--mut);display:inline-block;flex:none}
+.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.run{background:var(--acc);animation:pulse 1s infinite alternate}
+@keyframes pulse{from{opacity:.4}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.dot.run{animation:none}}
+nav{display:flex;flex-wrap:wrap;gap:4px;margin-left:12px}
+nav button{background:none;border:0;color:var(--mut);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:14px;transition:background .15s ease,color .15s ease}
+nav button:hover{color:var(--txt);background:rgba(42,52,65,.5)}
+nav button.active{background:var(--panel2);color:var(--txt)}
+main{max-width:1180px;margin:0 auto;padding:22px}
+.grid{display:grid;gap:14px}
+.cards{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.card .lbl{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+.card .val{font-size:24px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+.card .sub{color:var(--mut);font-size:12px;margin-top:2px}
+section{margin-top:18px}
+h2{font-size:15px;font-weight:600;margin-bottom:10px;color:var(--txt)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{color:var(--mut);text-align:left;font-weight:500;font-size:12px;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel2)}
+th.num,td.num{text-align:right}
+td.mono{font:12px ui-monospace,Consolas,monospace;color:var(--mut);max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-err{background:var(--err-bg);color:var(--err)}
+.b-mut{background:var(--mut-bg);color:var(--mut)}
+.b-info{background:var(--acc-bg);color:var(--acc)}
+.btn{background:var(--acc-btn);color:#fff;border:0;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13.5px;font-weight:500;transition:background .15s ease,opacity .15s ease}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sec{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+.btn.sm{padding:4px 10px;font-size:12.5px}
+.btn.danger{background:var(--err-btn)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+pre.log{background:#0b0f14;border:1px solid var(--line);border-radius:var(--radius);padding:14px;font:12px/1.55 ui-monospace,Consolas,monospace;color:#b9c6d4;overflow:auto;max-height:420px;white-space:pre-wrap}
+.banner{display:none;align-items:flex-start;gap:12px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px}
+.banner.open{display:flex}
+.banner.warn{border-left-color:var(--warn)}
+.banner.err{border-left-color:var(--err)}
+.banner .b-txt{flex:1;font-size:13.5px}
+.banner .b-sub{color:var(--mut);font-size:12.5px;margin-top:2px;font-variant-numeric:tabular-nums}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:10}
+.modal-bg.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(860px,94vw);max-height:90vh;overflow:auto;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.modal-bg.open .modal{animation:pop .16s ease}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}}
+.modal .spread{position:sticky;top:0;background:var(--panel);z-index:1;padding-bottom:8px}
+.modal h3{font-size:16px;margin-bottom:12px}
+select,input[type=text],input[type=password],input[type=number],input[type=url]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 10px;border-radius:7px;font-size:13.5px}
+label.f{display:block;color:var(--mut);font-size:12px;margin:12px 0 4px}
+input[type=text],input[type=password],input[type=number],input[type=url]{width:100%}
+.mono{font:12px ui-monospace,Consolas,monospace;color:var(--mut)}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--acc);padding:12px 16px;border-radius:8px;display:none;z-index:20;max-width:380px;animation:tin .18s ease}
+.toast.ok{border-left-color:var(--ok)}.toast.err{border-left-color:var(--err)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px;font-size:13.5px}
+.kv .k{color:var(--mut)}
+.empty{color:var(--mut);text-align:center;padding:26px}
+.tag-sel{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag-sel button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:3px 9px;font-size:12px;cursor:pointer;transition:border-color .15s ease}
+.tag-sel button:hover{border-color:var(--acc)}
+.tag-sel button.cur{border-color:var(--acc);color:var(--acc);background:var(--acc-bg);font-weight:600}
+.divider{border-top:1px solid var(--line);margin:20px 0}
+@media(max-width:640px){
+  main{padding:14px}
+  header{padding:12px 14px}
+  header h1{font-size:16px}
+  nav{margin-left:0}
+}
+</style>
 </head>
-
 <body>
-  <header>
-    <h1><span class="dot" id="hdrDot" title="service status"></span> Portainer Update Service</h1>
-    <nav>
-      <button data-tab="dash" class="active">Dashboard</button>
-      <button data-tab="stacks">Stacks</button>
-      <button data-tab="history">History</button>
-      <button data-tab="settings">Settings</button>
-    </nav>
-    <div style="margin-left:auto" class="row">
-      <span class="mono" id="hdrInfo"></span>
-      <button class="btn sec sm" id="btnCheck">Check updates</button>
-      <button class="btn sm danger" id="btnUpdate">Run update</button>
-    </div>
-  </header>
+<header>
+  <h1><span class="dot" id="hdrDot" title="service status"></span> Portainer Update Service</h1>
+  <nav>
+    <button data-tab="dash" class="active">Dashboard</button>
+    <button data-tab="stacks">Stacks</button>
+    <button data-tab="history">History</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <div style="margin-left:auto" class="row">
+    <span class="mono" id="hdrInfo"></span>
+    <button class="btn sec sm" id="btnCheck">Check updates</button>
+    <button class="btn sm danger" id="btnUpdate">Run update</button>
+  </div>
+</header>
 
-  <main>
-    <div class="banner" id="setupBanner">
-      <div class="b-txt"><b>Not connected to Portainer.</b>
-        <div class="b-sub">Enter your Portainer URL and API key to get started.</div>
-      </div>
-      <button class="btn sm" onclick="showTab('settings')">Open setup</button>
-    </div>
-    <div class="banner" id="runBanner">
-      <div class="b-txt"><b id="rbTitle">Update running…</b>
-        <div class="b-sub" id="rbSub"></div>
-        <div class="b-sub" id="rbActivity" style="color:var(--acc);font-size:12.5px;margin-top:2px"></div>
-        <pre class="log" id="rbTail" style="max-height:52px;margin-top:6px;font-size:11px"></pre>
-      </div>
-      <button class="btn sec sm" onclick="showTab('history')">History</button>
-      <button class="btn sec sm" id="rbLogBtn">Live log</button>
-    </div>
+<main>
+<div class="banner" id="setupBanner">
+  <div class="b-txt"><b>Not connected to Portainer.</b>
+    <div class="b-sub">Enter your Portainer URL and API key to get started.</div></div>
+  <button class="btn sm" onclick="showTab('settings')">Open setup</button>
+</div>
+<div class="banner" id="runBanner">
+  <div class="b-txt"><b id="rbTitle">Update running…</b>
+    <div class="b-sub" id="rbSub"></div>
+    <div class="b-sub" id="rbActivity" style="color:var(--acc);font-size:12.5px;margin-top:2px"></div>
+    <pre class="log" id="rbTail" style="max-height:52px;margin-top:6px;font-size:11px"></pre></div>
+  <button class="btn sec sm" onclick="showTab('history')">History</button>
+  <button class="btn sec sm" id="rbLogBtn">Live log</button>
+</div>
 
-    <!-- ============================================================ DASHBOARD -->
-    <div id="tab-dash">
-      <div class="grid cards">
-        <div class="card">
-          <div class="lbl">Updates available</div>
-          <div class="val" id="cUpd">–</div>
-          <div class="sub" id="cUpdSub"></div>
-        </div>
-        <div class="card" id="cLastCard" style="cursor:pointer" title="open failed run log">
-          <div class="lbl">Last run</div>
-          <div class="val" id="cLast">–</div>
-          <div class="sub" id="cLastSub"></div>
-        </div>
-        <div class="card">
-          <div class="lbl">Next scheduled update</div>
-          <div class="val" id="cNext">–</div>
-          <div class="sub" id="cNextSub"></div>
-        </div>
-        <div class="card">
-          <div class="lbl">Server time</div>
-          <div class="val" id="cServerTime" style="font-size:18px">–</div>
-          <div class="sub" id="cServerTzSub"></div>
-        </div>
-        <div class="card" id="cInvCard" style="cursor:pointer" title="unused images + networks">
-          <div class="lbl">Reclaimable</div>
-          <div class="val" id="cInv">–</div>
-          <div class="sub" id="cInvSub"></div>
-        </div>
-        <div class="card">
-          <div class="lbl">Reclaimed (30d)</div>
-          <div class="val" id="cReclaim">–</div>
-          <div class="sub" id="cReclaimSub"></div>
-        </div>
-        <div class="card">
-          <div class="lbl">Total runs</div>
-          <div class="val" id="cRuns">–</div>
-          <div class="sub" id="cRunsSub"></div>
-        </div>
-      </div>
-
-      <section>
-        <div class="spread">
-          <h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks</a>
-        </div>
-        <div class="panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Stack</th>
-                <th class="num">Services</th>
-                <th>Updates</th>
-                <th>Images</th>
-              </tr>
-            </thead>
-            <tbody id="dashStacks">
-              <tr>
-                <td colspan=4 class="empty">Loading…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-
-    <!-- =============================================================== STACKS -->
-    <div id="tab-stacks" style="display:none">
-      <div class="spread">
-        <h2>Stacks &amp; images</h2>
-        <div class="row">
-          <span class="mono" id="stackCheckInfo"></span>
-          <button class="btn sec sm" id="btnRecheck">Refresh check</button>
-        </div>
-      </div>
-      <div class="panel">
-        <table>
-          <thead>
-            <tr>
-              <th>Stack</th>
-              <th>Service</th>
-              <th>Image</th>
-              <th>Mode</th>
-              <th>Update</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="stackRows">
-            <tr>
-              <td colspan=6 class="empty">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ============================================================== HISTORY -->
-    <div id="tab-history" style="display:none">
-      <div class="grid cards">
-        <div class="card">
-          <div class="lbl">Success rate</div>
-          <div class="val" id="hRate">–</div>
-          <div class="sub">last 200 runs</div>
-        </div>
-        <div class="card">
-          <div class="lbl">Avg duration</div>
-          <div class="val" id="hDur">–</div>
-          <div class="sub">full updates</div>
-        </div>
-      </div>
-      <section>
-        <h2>Run log</h2>
-        <div class="panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Kind</th>
-                <th>Trigger</th>
-                <th>When</th>
-                <th class="num">Duration</th>
-                <th>Result</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="histRows">
-              <tr>
-                <td colspan=7 class="empty">Loading…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <pre class="log" id="runLog" style="display:none"></pre>
-      </section>
-    </div>
-
-    <!-- ============================================================ SETTINGS -->
-    <div id="tab-settings" style="display:none">
-      <div class="panel" style="max-width:640px">
-        <h2>Connection</h2>
-        <label class="f">Portainer URL</label><input type="url" id="sUrl" placeholder="https://portainer:9443">
-        <label class="f">API key</label><input type="password" id="sKey" placeholder="ptr_... (leave *** to keep)">
-        <div class="row" style="margin-top:8px">
-          <button class="btn sec sm" id="btnTest">Test connection</button>
-          <span class="mono" id="testResult"></span>
-        </div>
-        <label class="f">Portainer endpoint</label>
-        <div class="row">
-          <input type="number" id="sEid" placeholder="auto / endpoint id" style="flex:1;min-width:130px">
-          <button class="btn sec sm" id="btnScan">Scan</button>
-        </div>
-        <div id="scanResult" style="display:none;margin-top:8px"></div>
-        <label class="f"><input type="checkbox" id="sTls"> Verify TLS certificate</label>
-
-        <h2 style="margin-top:22px">Schedule &amp; deployment</h2>
-        <label class="f">Schedule mode</label>
-        <select id="sMode" style="width:100%">
-          <option value="interval">Interval (every N hours)</option>
-          <option value="daily">Daily at time</option>
-          <option value="weekly">Weekly at time</option>
-        </select>
-        <div id="modeInterval">
-          <label class="f">Update interval (hours) - checks + full updates</label>
-          <input type="number" id="sInt" min="1" max="8760">
-        </div>
-        <div id="modeTime" style="display:none">
-          <label class="f">Run time (server time)</label>
-          <input type="time" id="sTime">
-        </div>
-        <div id="modeWeekly" style="display:none">
-          <label class="f">Weekday</label>
-          <select id="sDay" style="width:100%">
-            <option value="0">Monday</option>
-            <option value="1">Tuesday</option>
-            <option value="2">Wednesday</option>
-            <option value="3">Thursday</option>
-            <option value="4">Friday</option>
-            <option value="5">Saturday</option>
-            <option value="6">Sunday</option>
-          </select>
-        </div>
-        <div class="b-sub" style="color:var(--mut);font-size:12px;margin-top:8px">
-          Server time: <span id="sServerTime">–</span> (<span id="sServerTz">–</span>) â€” the schedule refers to this
-          clock.
-        </div>
-        <label class="f">Max parallel deploys</label><input type="number" id="sPar" min="1" max="10">
-        <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
-        <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
-        <label class="f" style="margin-top:12px"><input type="checkbox" id="sIncludePortainer"> Also update Portainer
-          itself (redeploys the Portainer stack at the end of every full update)</label><label class="f">Self stack name
-          (this app's and Portainer's stack name, e.g. portainer_update_service,portainer — empty =
-          auto-detect)</label><input type="text" id="sSelfStack"><label class="f">Portainer compose dir (fallback only —
-          when Portainer is NOT deployed as a Portainer stack)</label><input type="text" id="sCompose"
-          placeholder="host path, mounted into the container as /host-portainer">
-        <label class="f">Portainer compose dir (fallback: only when Portainer is NOT a Portainer stack)</label>
-        <input type="text" id="sCompose" placeholder="empty = use include_portainer mode">
-        <label class="f">Check cache (minutes)</label><input type="number" id="sCache" min="5" max="720">
-        <label class="f">Failure notification webhook (optional, e.g. ntfy)</label><input type="url" id="sHook"
-          placeholder="https://ntfy.example/your-topic">
-
-        <h2 style="margin-top:22px">Network integrity repairs</h2>
-        <label class="f"><input type="checkbox" id="sRep"> Automatic network integrity repairs</label>
-        <div style="color:var(--mut);font-size:12px">Built-in: detects containers whose host-gateway mapping
-          (extra_hosts) went stale after a network prune and recreates their stack. Optional custom repair rules can be
-          defined in config/config.yaml (repairs.rules).</div>
-
-        <div class="row" style="margin-top:20px">
-          <button class="btn" id="btnSave">Save settings</button>
-        </div>
-        <p style="color:var(--mut);font-size:12px;margin-top:14px">Settings are persisted to
-          <code>config/config.yaml</code> in the mounted config volume and survive container rebuilds.
-        </p>
-        <div class="divider"></div>
-        <h2>Maintenance</h2>
-        <div class="row">
-          <button class="btn danger" id="btnPrune">Clean up unused images now</button>
-          <span style="color:var(--mut);font-size:12.5px">removes all unused images &amp; build cache
-            — previous image versions can't be rolled back afterwards</span>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- stack detail modal -->
-  <div class="modal-bg" id="modalBg" role="dialog" aria-modal="true">
-    <div class="modal">
-      <div class="spread">
-        <h3 id="mTitle">Stack</h3>
-        <div class="row">
-          <button class="btn sm" id="mRedeploy">Update stack now</button>
-          <button class="btn sec sm" onclick="closeModal()">Close</button>
-        </div>
-      </div>
-      <div id="mBody"></div>
-      <h3 style="margin-top:18px">Compose file</h3>
-      <pre class="log" id="mCompose" style="max-height:260px"></pre>
-    </div>
+<!-- ============================================================ DASHBOARD -->
+<div id="tab-dash">
+  <div class="grid cards">
+    <div class="card"><div class="lbl">Updates available</div><div class="val" id="cUpd">–</div><div class="sub" id="cUpdSub"></div></div>
+    <div class="card" id="cLastCard" style="cursor:pointer" title="open failed run log"><div class="lbl">Last run</div><div class="val" id="cLast">–</div><div class="sub" id="cLastSub"></div></div>
+    <div class="card"><div class="lbl">Next scheduled update</div><div class="val" id="cNext">–</div><div class="sub" id="cNextSub"></div></div>
+    <div class="card"><div class="lbl">Server time</div><div class="val" id="cServerTime" style="font-size:18px">–</div><div class="sub" id="cServerTzSub"></div></div>
+    <div class="card" id="cInvCard" style="cursor:pointer" title="unused images + networks">
+      <div class="lbl">Reclaimable</div><div class="val" id="cInv">–</div><div class="sub" id="cInvSub"></div></div>
+    <div class="card"><div class="lbl">Reclaimed (30d)</div><div class="val" id="cReclaim">–</div><div class="sub" id="cReclaimSub"></div></div>
+    <div class="card"><div class="lbl">Total runs</div><div class="val" id="cRuns">–</div><div class="sub" id="cRunsSub"></div></div>
   </div>
 
-  <div class="toast" id="toast" aria-live="polite"></div>
+  <section>
+    <div class="spread"><h2>Stacks</h2><a href="#" onclick="showTab('stacks');return false">all stacks â†’</a></div>
+    <div class="panel"><table><thead><tr><th>Stack</th><th class="num">Services</th><th>Updates</th><th>Images</th></tr></thead><tbody id="dashStacks"><tr><td colspan=4 class="empty">Loading…</td></tr></tbody></table></div>
+  </section>
+</div>
 
-  <script>
-    const $ = id => document.getElementById(id);
-    const fmt = s => s ? new Date(s * 1000).toLocaleString() : '–';
-    const ago = s => {
-      if (!s) return '–'; const d = Math.floor(Date.now() / 1000 - s);
-      if (d < 60) return d + 's ago'; if (d < 3600) return Math.floor(d / 60) + 'm ago';
-      if (d < 86400) return Math.floor(d / 3600) + 'h ago'; return Math.floor(d / 86400) + 'd ago'
-    };
-    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-    let lastFailedRun = null;
+<!-- =============================================================== STACKS -->
+<div id="tab-stacks" style="display:none">
+  <div class="spread"><h2>Stacks &amp; images</h2>
+    <div class="row">
+      <span class="mono" id="stackCheckInfo"></span>
+      <button class="btn sec sm" id="btnRecheck">Refresh check</button>
+    </div></div>
+  <div class="panel"><table>
+    <thead><tr><th>Stack</th><th>Service</th><th>Image</th><th>Mode</th><th>Update</th><th></th></tr></thead>
+    <tbody id="stackRows"><tr><td colspan=6 class="empty">Loading…</td></tr></tbody>
+  </table></div>
+</div>
 
-    /* ---------------------------------------------------------------- auth */
-    let AUTH_TOKEN = localStorage.getItem('pus_token') || '';
-    let AUTH_ENABLED = false;
+<!-- ============================================================== HISTORY -->
+<div id="tab-history" style="display:none">
+  <div class="grid cards">
+    <div class="card"><div class="lbl">Success rate</div><div class="val" id="hRate">–</div><div class="sub">last 200 runs</div></div>
+    <div class="card"><div class="lbl">Avg duration</div><div class="val" id="hDur">–</div><div class="sub">full updates</div></div>
+  </div>
+  <section>
+    <h2>Run log</h2>
+    <div class="panel"><table><thead><tr><th>Run</th><th>Kind</th><th>Trigger</th><th>When</th><th class="num">Duration</th><th>Result</th><th></th></tr></thead>
+    <tbody id="histRows"><tr><td colspan=7 class="empty">Loading…</td></tr></tbody></table></div>
+    <pre class="log" id="runLog" style="display:none"></pre>
+  </section>
+</div>
 
-    function authHeaders(extra) {
-      const h = {...(extra || {})};
-      if (AUTH_TOKEN) h['Authorization'] = 'Bearer ' + AUTH_TOKEN;
-      return h;
-    }
+<!-- ============================================================ SETTINGS -->
+<div id="tab-settings" style="display:none">
+  <div class="panel" style="max-width:640px">
+    <h2>Connection</h2>
+    <label class="f">Portainer URL</label><input type="url" id="sUrl" placeholder="https://portainer:9443">
+    <label class="f">API key</label><input type="password" id="sKey" placeholder="ptr_... (leave *** to keep)">
+    <div class="row" style="margin-top:8px">
+      <button class="btn sec sm" id="btnTest">Test connection</button>
+      <span class="mono" id="testResult"></span>
+    </div>
+    <label class="f">Portainer endpoint</label>
+    <div class="row">
+      <input type="number" id="sEid" placeholder="auto / endpoint id" style="flex:1;min-width:130px">
+      <button class="btn sec sm" id="btnScan">Scan</button>
+    </div>
+    <div id="scanResult" style="display:none;margin-top:8px"></div>
+    <label class="f"><input type="checkbox" id="sTls"> Verify TLS certificate</label>
 
-    /* ---------------------------------------------------------------- toast */
-    function toast(msg, cls = '', sticky = false) {
-      const t = $('toast'); t.textContent = msg; t.className = 'toast ' + cls; t.style.display = 'block';
-      clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', sticky ? 12000 : 4000)
-    }
-    async function api(path, opts = {}) {
-      opts.headers = authHeaders(opts.headers);
-      if (opts.body && !opts.headers['Content-Type']) opts.headers['Content-Type'] = 'application/json';
-      const r = await fetch(path, opts);
-      if (r.status === 401 && AUTH_ENABLED) {
-        const tok = prompt('This instance requires an auth token.\n(Settings > auth_token in config.yaml):');
-        if (tok !== null) {AUTH_TOKEN = tok.trim(); localStorage.setItem('pus_token', AUTH_TOKEN);}
-        if (AUTH_TOKEN) {opts.headers = authHeaders(opts.headers); return api(path, opts)}
-      }
-      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j
-    }
+    <h2 style="margin-top:22px">Schedule &amp; deployment</h2>
+    <label class="f">Schedule mode</label>
+    <select id="sMode" style="width:100%">
+      <option value="interval">Interval (every N hours)</option>
+      <option value="daily">Daily at time</option>
+      <option value="weekly">Weekly at time</option>
+    </select>
+    <div id="modeInterval">
+      <label class="f">Update interval (hours) - checks + full updates</label>
+      <input type="number" id="sInt" min="1" max="8760">
+    </div>
+    <div id="modeTime" style="display:none">
+      <label class="f">Run time (server time)</label>
+      <input type="time" id="sTime">
+    </div>
+    <div id="modeWeekly" style="display:none">
+      <label class="f">Weekday</label>
+      <select id="sDay" style="width:100%">
+        <option value="0">Monday</option><option value="1">Tuesday</option>
+        <option value="2">Wednesday</option><option value="3">Thursday</option>
+        <option value="4">Friday</option><option value="5">Saturday</option>
+        <option value="6">Sunday</option>
+      </select>
+    </div>
+    <div class="b-sub" style="color:var(--mut);font-size:12px;margin-top:8px">
+      Server time: <span id="sServerTime">–</span> (<span id="sServerTz">–</span>) â€” the schedule refers to this clock.
+    </div>
+    <label class="f">Max parallel deploys</label><input type="number" id="sPar" min="1" max="10">
+    <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
+    <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
+    <label class="f" style="margin-top:12px"><input type="checkbox" id="sIncludePortainer"> Also update Portainer itself (redeploys the Portainer stack at the end of every full update)</label>
+    <label class="f">Self stack name (this app's and Portainer's stack name, e.g. portainer_update_service,portainer — empty = auto-detect)</label>
+    <input type="text" id="sSelfStack">
+    <label class="f">Portainer compose dir (fallback only — when Portainer is NOT deployed as a Portainer stack)</label>
+    <input type="text" id="sCompose" placeholder="host path, mounted into the container as /host-portainer">
+    <label class="f">Check cache (minutes)</label><input type="number" id="sCache" min="5" max="720">
+    <label class="f">Failure notification webhook (optional, e.g. ntfy)</label><input type="url" id="sHook" placeholder="https://ntfy.example/your-topic">
 
-    /* ---------------------------------------------------------------- tabs */
-    function showTab(name) {
-      document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-      ['dash', 'stacks', 'history', 'settings'].forEach(t => $('tab-' + t).style.display = t === name ? '' : 'none');
-      if (name === 'stacks') loadStacks(); if (name === 'history') loadHistory(); if (name === 'settings') loadSettings();
-    }
-    document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
-    document.addEventListener('keydown', e => {if (e.key === 'Escape') closeModal()});
+    <h2 style="margin-top:22px">Network integrity repairs</h2>
+    <label class="f"><input type="checkbox" id="sRep"> Automatic network integrity repairs</label>
+    <div style="color:var(--mut);font-size:12px">Built-in: detects containers whose host-gateway mapping (extra_hosts) went stale after a network prune and recreates their stack. Optional custom repair rules can be defined in config/config.yaml (repairs.rules).</div>
 
-    /* ------------------------------------------------------------ status poll */
-    let lastDashHtml = null, lastStacksHtml = null;
-    async function refresh() {
-      try {
-        const [s, inv, hh] = await Promise.all([
-          api('/api/status'),
-          api('/api/inventory').catch(() => null),
-          api('/api/history').catch(() => null)]);
-        const dot = $('hdrDot');
-        const busy = s.scheduler && s.scheduler.busy;
-        dot.className = 'dot ' + (busy ? 'run' : s.state === 'success' ? 'ok' : s.state === 'failed' ? 'err' : '');
-        dot.title = busy ? 'job running' : 'service ' + (s.state || 'idle');
-        $('hdrInfo').textContent = s.configured ? '' : 'not configured';
-        $('hdrInfo').title = '';
-        AUTH_ENABLED = !!s.auth_enabled;
-        if (s.auth_enabled && !AUTH_TOKEN) $('hdrInfo').textContent += ' · auth required';
-        // setup banner
-        $('setupBanner').classList.toggle('open', !s.configured);
-        // run banner: poll fast while busy
-        if (busy) {await refreshRunBanner()}
-        else {$('runBanner').classList.remove('open'); stopLiveLog()}
-        $('cUpd').textContent = s.check && s.check.checked_at != null ? s.check.updates_available : '–';
-        $('cUpdSub').textContent = s.check && s.check.checked_at ? ('checked ' + ago(s.check.checked_at)) : 'no check yet';
-        const lr = s.last_run;
-        lastFailedRun = lr && !lr.success && lr.run_id ? lr.run_id : null;
-        $('cLast').textContent = lr ? (lr.interrupted ? 'INTERRUPTED' : lr.success ? 'OK' : 'FAILED') : '–';
-        $('cLast').style.color = lr ? (lr.success ? 'var(--ok)' : 'var(--err)') : 'var(--txt)';
-        $('cLastSub').textContent = lr ? (ago(lr.finished) + ' · ' + lr.kind + ' · ' + (lr.duration_s ?? '?') + 's') : 'no runs yet';
-        if (s.scheduler) {
-          const nf = s.scheduler.next_full_update;
-          const desc = s.scheduler.schedule_desc || '';
-          // server time card
-          $('cServerTime').textContent = s.scheduler.server_time_local || '–';
-          $('cServerTzSub').textContent = (s.scheduler.server_tz || '') + ' · ' + desc;
-          if (nf) {
-            const delta = Math.round((nf - Date.now() / 1000) / 60);
-            if (delta < 0) {
-              $('cNext').textContent = 'overdue'; $('cNext').style.color = 'var(--warn)';
-              $('cNextSub').textContent = `by ${Math.abs(delta)} min · ${desc}`
-            }
-            else {
-              $('cNext').textContent = new Date(nf * 1000).toLocaleString([], {
-                weekday: 'short', hour: '2-digit', minute: '2-digit'
-              });
-              $('cNext').style.color = 'var(--txt)';
-              $('cNextSub').textContent = `in ${delta >= 120 ? Math.round(delta / 60) + 'h' : delta + 'm'}`;
-            }
-          }
-          if (s.scheduler.consecutive_failures > 0) {
-            $('cNextSub').textContent += ' · ' + s.scheduler.consecutive_failures + ' failures (backoff)';
-          }
-        }
-        // inventory card (s.inventory from status if present, else live fetch)
-        const iv = s.inventory || inv;
-        if (iv) {
-          $('cInv').textContent = iv.images_unused + ' (' + iv.images_unused_mb + ' MB)';
-          $('cInvSub').textContent = 'of ' + iv.images_total + ' images · ' + iv.networks_unused + ' unused networks';
-        } else {$('cInv').textContent = '–'; $('cInvSub').textContent = 'unavailable'}
-        $('cRuns').textContent = s.runs_total ?? '–';
-        // reclaimed card from history stats
-        const ps = (hh && hh.prune_stats_30d) || null;
-        if (ps) {
-          $('cReclaim').textContent = (ps.reclaimed_mb_30d || 0) + ' MB';
-          $('cReclaimSub').textContent = 'in ' + (ps.prune_runs_30d || 0) + ' prunes · ' + (ps.images_deleted_30d || 0) + ' images'
-        }
-        else {$('cReclaim').textContent = '–'; $('cReclaimSub').textContent = 'unavailable'}
-        $('cRunsSub').textContent = 'all time';
-        if (currentTab() === 'dash') renderDashStacks(s.stacks || {});
-        gateBusyFlag = !!busy;
-        if (busy) {ensureBannerTimer(); setBusyUI(true)} else setBusyUI(false);
-      } catch (e) {$('hdrInfo').textContent = e.message}
-    }
-    function currentTab() {return document.querySelector('nav button.active').dataset.tab}
+    <div class="row" style="margin-top:20px">
+      <button class="btn" id="btnSave">Save settings</button>
+    </div>
+    <p style="color:var(--mut);font-size:12px;margin-top:14px">Settings are persisted to
+      <code>config/config.yaml</code> in the mounted config volume and survive container rebuilds.</p>
+    <div class="divider"></div>
+    <h2>Maintenance</h2>
+    <div class="row">
+      <button class="btn danger" id="btnPrune">Clean up unused images now</button>
+      <span style="color:var(--mut);font-size:12.5px">removes all unused images &amp; build cache
+        — previous image versions can't be rolled back afterwards</span>
+    </div>
+  </div>
+</div>
+</main>
 
-    /* ----------------------------------------------------------- run banner */
-    const PHASES = {
-      preflight: 'pre-flight checks', backup: 'Portainer backup', prune: 'docker prune',
-      redeploy_stacks: 'redeploying stacks', reconciliation_sweep: 'verification sweep',
-      post_deployment_repairs: 'post-deployment repairs', update_portainer: 'Portainer self-update',
-      docker_prune: 'docker prune', pin_version: 'version pin', update: 'Full update',
-      check: 'Update check', redeploy: 'Stack redeploy'
-    };
-    /* translate raw log lines into a friendly ongoing-activity line */
-    function activityLine(tail) {
-      const lines = (tail || []).join('').split('\n').map(s => s.trim()).filter(Boolean);
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const l = lines[i];
-        let m;
-        if ((m = l.match(/\[INFO\] (.+)$/))) return m[1];
-        if ((m = l.match(/\[OK\] (.+)$/))) return m[1].length > 70 ? m[1].slice(0, 77) + '…' : m[1];
-        if ((m = l.match(/\[WARN\] (.+)$/))) return m[1];
-        if ((m = l.match(/\[ERROR\] (.+)$/))) return '⚠ ' + m[1];
-        if ((m = l.match(/Found (\d+) stacks\. Deploying (\d+) now/)))
-          return `redeploying ${m[2]} stacks…`;
-        if ((m = l.match(/Pulling image (.+?) for/))) return `pulling ${m[1]}…`;
-        if ((m = l.match(/Checking (\d+) stacks/))) return `checking ${m[1]} stacks against DockerHub…`;
-      }
-      return 'working…';
-    }
-    let bannerTimer = null;
+<!-- stack detail modal -->
+<div class="modal-bg" id="modalBg" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="spread"><h3 id="mTitle">Stack</h3>
+      <div class="row">
+        <button class="btn sm" id="mRedeploy">Update stack now</button>
+        <button class="btn sec sm" onclick="closeModal()">Close</button>
+      </div></div>
+    <div id="mBody"></div>
+    <h3 style="margin-top:18px">Compose file</h3>
+    <pre class="log" id="mCompose" style="max-height:260px"></pre>
+  </div>
+</div>
 
-    async function refreshRunBanner() {
-      try {
-        const c = await api('/api/runs/current');
-        if (!c.active) {$('runBanner').classList.remove('open'); stopLiveLog(); return false}
-        $('runBanner').classList.add('open');
-        const steps = c.steps || [];
-        const okN = steps.filter(x => x.ok).length;
-        $('rbTitle').textContent = (PHASES[c.holder] || c.holder || 'job') + ' running…';
-        const tail = (c.log_tail || []);
-        const joined = tail.join('');
-        $('rbSub').textContent = (steps.length ? `${okN}/${steps.length} steps done · ` : '') +
-          Math.round((Date.now() / 1000 - c.since) / 60 * 10) / 10 + ' min elapsed';
-        $('rbActivity').textContent = activityLine(tail);
-        $('rbTail').textContent = joined.trim() ? tail.slice(-3).join('').trim() : 'starting…';
-        $('rbLogBtn').style.display = c.run_id ? '' : 'none';
-        $('rbLogBtn').onclick = () => showRunLog(c.run_id, true);
-        return true;
-      } catch (e) {return false}
-    }
-    /* dedicated fast poll while a job runs (banner feels live) */
-    function ensureBannerTimer() {
-      if (bannerTimer) return;
-      bannerTimer = setInterval(async () => {
-        try {
-          const c = await api('/api/runs/current');
-          if (c.active) {await refreshRunBanner()}
-          else {
-            $('runBanner').classList.remove('open'); stopLiveLog(); clearInterval(bannerTimer); bannerTimer = null;
-            setBusyUI(false); refresh()
-          }
-        }
-        catch (e) { }
-      }, 2000);
-    }
-    let gateBusyFlag = false;
+<div class="toast" id="toast" aria-live="polite"></div>
 
-    /* live log in History <pre>: auto-refresh while the run is active */
-    let liveLogTimer = null;
-    function stopLiveLog() {
-      if (liveLogTimer) {clearInterval(liveLogTimer); liveLogTimer = null}
-      const p = $('runLog'); if (p) p._live = null
-    }
-    async function showRunLog(id, live = false) {
-      if (currentTab() !== 'history') showTab('history');
-      const p = $('runLog'); p.style.display = 'block'; p.textContent = 'loading…';
-      p.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-      stopLiveLog();
-      try {p.textContent = await (await fetch('/api/runs/' + encodeURIComponent(id) + '/log')).text()}
-      catch (e) {p.textContent = e.message}
-      if (live && id) {
-        p._live = id;
-        p.scrollTop = p.scrollHeight;
-        liveLogTimer = setInterval(async () => {
-          if (!p._live || p._live !== id) {clearInterval(liveLogTimer); liveLogTimer = null; return }
-          try {
-            const cur = await api('/api/runs/current');
-            const txt = await (await fetch('/api/runs/' + encodeURIComponent(id) + '/log')).text();
-            const atBottom = p.scrollHeight - p.scrollTop - p.clientHeight < 40;
-            p.textContent = txt;
-            if (atBottom || live) p.scrollTop = p.scrollHeight;
-            if (!cur.active || cur.run_id !== id) {stopLiveLog()}
-          } catch (e) { }
-        }, 3000);
-      }
-    }
+<script>
+const $=id=>document.getElementById(id);
+const fmt=s=>s?new Date(s*1000).toLocaleString():'–';
+const ago=s=>{if(!s)return'–';const d=Math.floor(Date.now()/1000-s);
+ if(d<60)return d+'s ago';if(d<3600)return Math.floor(d/60)+'m ago';
+ if(d<86400)return Math.floor(d/3600)+'h ago';return Math.floor(d/86400)+'d ago'};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let lastFailedRun=null;
 
-    /* ------------------------------------------------------- dashboard stacks */
-    function renderDashStacks(stacks) {
-      const tb = $('dashStacks');
-      const names = Object.keys(stacks);
-      let html;
-      if (!names.length) html = '<tr><td colspan=4 class="empty">No check data yet - run "Check updates".</td></tr>';
-      else {
-        const rows = names.sort().map(n => {
-          const svcs = stacks[n], imgs = Object.values(svcs);
-          const upd = imgs.filter(v => v.update_available).length;
-          const badge = upd ? `<span class="badge b-warn">${upd} update${upd > 1 ? 's' : ''}</span>` : '<span class="badge b-ok">up to date</span>';
-          return `<tr style="cursor:pointer" data-st="${esc(n)}"><td><b>${esc(n)}</b></td><td class="num">${imgs.length}</td><td>${badge}</td><td class="mono" title="${esc(imgs.map(i => i.image).join(', '))}">${esc(imgs.map(i => i.image).slice(0, 2).join(', '))}</td></tr>`;
-        }).join('');
-        html = rows;
-      }
-      if (html === lastDashHtml) return; // unchanged - zero DOM churn, no flicker
-      lastDashHtml = html;
-      tb.innerHTML = html;
-      tb.querySelectorAll('tr[data-st]').forEach(tr => {tr.onclick = () => openStack(tr.dataset.st)});
-    }
+/* ---------------------------------------------------------------- auth */
+let AUTH_TOKEN = localStorage.getItem('pus_token') || '';
+let AUTH_ENABLED = false;
 
-    /* ----------------------------------------------------------------- stacks */
-    let stacksLoaded = false;
-    async function loadStacks() {
-      const tb = $('stackRows');
-      if (!stacksLoaded) tb.innerHTML = '<tr><td colspan=6 class="empty">Loading…</td></tr>';
-      try {
-        const s = await api('/api/stacks');
-        $('stackCheckInfo').textContent = s.checked_at ? ('checked ' + ago(s.checked_at)) : 'no check data yet';
-        let html;
-        if (!s.stacks.length) html = '<tr><td colspan=6 class="empty">No stacks found - check Settings.</td></tr>';
-        else {
-          html = '';
-          s.stacks.forEach(st => {
-            const svcs = Object.entries(st.services || {});
-            if (!svcs.length) {
-              html += `<tr><td><b>${esc(st.name)}</b></td><td colspan=4 class="empty">no images / no check data</td>
-     <td><button class="btn sm sec" data-st="${st.id}" data-nm="${esc(st.name)}" data-act="redeploy">Update</button></td></tr>`; return
-            }
-            const updN = Object.values(st.services).filter(v => v.update_available).length;
-            svcs.forEach(([svc, v], i) => {
-              const badge = v.update_available ? `<span class="badge b-warn" title="available for ${v.lag_days ?? 0} days">update: ${esc(v.latest_tag || 'digest')}</span>`
-                : v.note ? '<span class="badge b-mut" title="' + esc(v.note) + '">not verified</span>' : '<span class="badge b-ok">current</span>';
-              const mode = v.mode === 'digest' ? 'latest (digest)' : v.mode === 'semver' ? 'pinned (version)' :
-                v.mode === 'pinned-digest' ? 'digest-pinned' : 'unknown';
-              html += `<tr>
-      ${i === 0 ? `<td rowspan="${svcs.length}"><b>${esc(st.name)}</b>${updN ? ` <span class="badge b-warn">${updN}</span>` : ''}<br>
-        <a href="#" data-nm="${esc(st.name)}" data-act="open">manage</a></td>` : ''}
+function authHeaders(extra){
+  const h = {...(extra||{})};
+  if(AUTH_TOKEN) h['Authorization'] = 'Bearer ' + AUTH_TOKEN;
+  return h;
+}
+
+/* ---------------------------------------------------------------- toast */
+function toast(msg,cls='',sticky=false){const t=$('toast');t.textContent=msg;t.className='toast '+cls;t.style.display='block';
+ clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',sticky?12000:4000)}
+async function api(path,opts={}){
+ opts.headers=authHeaders(opts.headers);
+ if(opts.body&&!opts.headers['Content-Type'])opts.headers['Content-Type']='application/json';
+ const r=await fetch(path,opts);
+ if(r.status===401&&AUTH_ENABLED){
+  const tok=prompt('This instance requires an auth token.\n(Settings > auth_token in config.yaml):');
+  if(tok!==null){AUTH_TOKEN=tok.trim();localStorage.setItem('pus_token',AUTH_TOKEN);}
+  if(AUTH_TOKEN){opts.headers=authHeaders(opts.headers);return api(path,opts)}
+ }
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.statusText);return j}
+
+/* ---------------------------------------------------------------- tabs */
+function showTab(name){
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+ ['dash','stacks','history','settings'].forEach(t=>$('tab-'+t).style.display=t===name?'':'none');
+ if(name==='stacks')loadStacks();if(name==='history')loadHistory();if(name==='settings')loadSettings();
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+/* ------------------------------------------------------------ status poll */
+let lastDashHtml=null,lastStacksHtml=null;
+async function refresh(){
+ try{
+  const [s,inv,hh]=await Promise.all([
+   api('/api/status'),
+   api('/api/inventory').catch(()=>null),
+   api('/api/history').catch(()=>null)]);
+  const dot=$('hdrDot');
+  const busy=s.scheduler&&s.scheduler.busy;
+  dot.className='dot '+(busy?'run':s.state==='success'?'ok':s.state==='failed'?'err':'');
+  dot.title=busy?'job running':'service '+(s.state||'idle');
+  $('hdrInfo').textContent=s.configured?'':'not configured';
+  $('hdrInfo').title='';
+  AUTH_ENABLED=!!s.auth_enabled;
+  if(s.auth_enabled&&!AUTH_TOKEN)$('hdrInfo').textContent+=' · auth required';
+  // setup banner
+  $('setupBanner').classList.toggle('open',!s.configured);
+  // run banner: poll fast while busy
+  if(busy){await refreshRunBanner()}
+  else{$('runBanner').classList.remove('open');stopLiveLog()}
+  $('cUpd').textContent=s.check&&s.check.checked_at!=null?s.check.updates_available:'–';
+  $('cUpdSub').textContent=s.check&&s.check.checked_at?('checked '+ago(s.check.checked_at)):'no check yet';
+  const lr=s.last_run;
+  lastFailedRun=lr&&!lr.success&&lr.run_id?lr.run_id:null;
+  $('cLast').textContent=lr?(lr.interrupted?'INTERRUPTED':lr.success?'OK':'FAILED'):'–';
+  $('cLast').style.color=lr?(lr.success?'var(--ok)':'var(--err)'):'var(--txt)';
+  $('cLastSub').textContent=lr?(ago(lr.finished)+' · '+lr.kind+' · '+(lr.duration_s??'?')+'s'):'no runs yet';
+  if(s.scheduler){
+   const nf=s.scheduler.next_full_update;
+   const desc=s.scheduler.schedule_desc||'';
+   // server time card
+   $('cServerTime').textContent=s.scheduler.server_time_local||'–';
+   $('cServerTzSub').textContent=(s.scheduler.server_tz||'')+' · '+desc;
+   if(nf){
+    const delta=Math.round((nf-Date.now()/1000)/60);
+    if(delta<0){$('cNext').textContent='overdue';$('cNext').style.color='var(--warn)';
+      $('cNextSub').textContent=`by ${Math.abs(delta)} min · ${desc}`}
+    else{
+     $('cNext').textContent=new Date(nf*1000).toLocaleString([],{
+      weekday:'short',hour:'2-digit',minute:'2-digit'});
+     $('cNext').style.color='var(--txt)';
+     $('cNextSub').textContent=`in ${delta>=120?Math.round(delta/60)+'h':delta+'m'}`;
+    }
+   }
+   if(s.scheduler.consecutive_failures>0){
+    $('cNextSub').textContent+=' · '+s.scheduler.consecutive_failures+' failures (backoff)';
+   }
+  }
+  // inventory card (s.inventory from status if present, else live fetch)
+  const iv=s.inventory||inv;
+  if(iv){
+   $('cInv').textContent=iv.images_unused+' ('+iv.images_unused_mb+' MB)';
+   $('cInvSub').textContent='of '+iv.images_total+' images · '+iv.networks_unused+' unused networks';
+  }else{$('cInv').textContent='–';$('cInvSub').textContent='unavailable'}
+  $('cRuns').textContent=s.runs_total??'–';
+  // reclaimed card from history stats
+  const ps=(hh&&hh.prune_stats_30d)||null;
+  if(ps){$('cReclaim').textContent=(ps.reclaimed_mb_30d||0)+' MB';
+   $('cReclaimSub').textContent='in '+(ps.prune_runs_30d||0)+' prunes · '+(ps.images_deleted_30d||0)+' images'}
+  else{$('cReclaim').textContent='–';$('cReclaimSub').textContent='unavailable'}
+  $('cRunsSub').textContent='all time';
+  if(currentTab()==='dash')renderDashStacks(s.stacks||{});
+  gateBusyFlag=!!busy;
+  if(busy){ensureBannerTimer();setBusyUI(true)}else setBusyUI(false);
+ }catch(e){$('hdrInfo').textContent=e.message}
+}
+function currentTab(){return document.querySelector('nav button.active').dataset.tab}
+
+/* ----------------------------------------------------------- run banner */
+const PHASES={preflight:'pre-flight checks',backup:'Portainer backup',prune:'docker prune',
+ redeploy_stacks:'redeploying stacks',reconciliation_sweep:'verification sweep',
+ post_deployment_repairs:'post-deployment repairs',update_portainer:'Portainer self-update',
+ docker_prune:'docker prune',pin_version:'version pin',update:'Full update',
+ check:'Update check',redeploy:'Stack redeploy'};
+/* translate raw log lines into a friendly ongoing-activity line */
+function activityLine(tail){
+ const lines=(tail||[]).join('').split('\n').map(s=>s.trim()).filter(Boolean);
+ for(let i=lines.length-1;i>=0;i--){
+  const l=lines[i];
+  let m;
+  if((m=l.match(/\[INFO\] (.+)$/)))return m[1];
+  if((m=l.match(/\[OK\] (.+)$/)))return m[1].length>70?m[1].slice(0,77)+'…':m[1];
+  if((m=l.match(/\[WARN\] (.+)$/)))return m[1];
+  if((m=l.match(/\[ERROR\] (.+)$/)))return '⚠ '+m[1];
+  if((m=l.match(/Found (\d+) stacks\. Deploying (\d+) now/)))
+   return `redeploying ${m[2]} stacks…`;
+  if((m=l.match(/Pulling image (.+?) for/)))return `pulling ${m[1]}…`;
+  if((m=l.match(/Checking (\d+) stacks/)))return `checking ${m[1]} stacks against DockerHub…`;
+ }
+ return 'working…';
+}
+let bannerTimer=null;
+
+async function refreshRunBanner(){
+ try{
+  const c=await api('/api/runs/current');
+  if(!c.active){$('runBanner').classList.remove('open');stopLiveLog();return false}
+  $('runBanner').classList.add('open');
+  const steps=c.steps||[];
+  const okN=steps.filter(x=>x.ok).length;
+  $('rbTitle').textContent=(PHASES[c.holder]||c.holder||'job')+' running…';
+  const tail=(c.log_tail||[]);
+  const joined=tail.join('');
+  $('rbSub').textContent=(steps.length?`${okN}/${steps.length} steps done · `:'')+
+   Math.round((Date.now()/1000-c.since)/60*10)/10+' min elapsed';
+  $('rbActivity').textContent=activityLine(tail);
+  $('rbTail').textContent=joined.trim()?tail.slice(-3).join('').trim():'starting…';
+  $('rbLogBtn').style.display=c.run_id?'':'none';
+  $('rbLogBtn').onclick=()=>showRunLog(c.run_id,true);
+  return true;
+ }catch(e){return false}
+}
+/* dedicated fast poll while a job runs (banner feels live) */
+function ensureBannerTimer(){
+ if(bannerTimer)return;
+ bannerTimer=setInterval(async()=>{
+  try{const c=await api('/api/runs/current');
+   if(c.active){await refreshRunBanner()}
+   else{$('runBanner').classList.remove('open');stopLiveLog();clearInterval(bannerTimer);bannerTimer=null;
+    setBusyUI(false);refresh()}}
+  catch(e){}
+ },2000);
+}
+let gateBusyFlag=false;
+
+/* live log in History <pre>: auto-refresh while the run is active */
+let liveLogTimer=null;
+function stopLiveLog(){if(liveLogTimer){clearInterval(liveLogTimer);liveLogTimer=null}
+ const p=$('runLog');if(p)p._live=null}
+async function showRunLog(id,live=false){
+ if(currentTab()!=='history')showTab('history');
+ const p=$('runLog');p.style.display='block';p.textContent='loading…';
+ p.scrollIntoView({behavior:'smooth',block:'nearest'});
+ stopLiveLog();
+ try{p.textContent=await (await fetch('/api/runs/'+encodeURIComponent(id)+'/log')).text()}
+ catch(e){p.textContent=e.message}
+ if(live&&id){
+  p._live=id;
+  p.scrollTop=p.scrollHeight;
+  liveLogTimer=setInterval(async()=>{
+   if(!p._live||p._live!==id){clearInterval(liveLogTimer);liveLogTimer=null;return}
+   try{
+    const cur=await api('/api/runs/current');
+    const txt=await (await fetch('/api/runs/'+encodeURIComponent(id)+'/log')).text();
+    const atBottom=p.scrollHeight-p.scrollTop-p.clientHeight<40;
+    p.textContent=txt;
+    if(atBottom||live)p.scrollTop=p.scrollHeight;
+    if(!cur.active||cur.run_id!==id){stopLiveLog()}
+   }catch(e){}
+  },3000);
+ }
+}
+
+/* ------------------------------------------------------- dashboard stacks */
+function renderDashStacks(stacks){
+ const tb=$('dashStacks');
+ const names=Object.keys(stacks);
+ let html;
+ if(!names.length)html='<tr><td colspan=4 class="empty">No check data yet - run "Check updates".</td></tr>';
+ else{
+  const rows=names.sort().map(n=>{
+   const svcs=stacks[n],imgs=Object.values(svcs);
+   const upd=imgs.filter(v=>v.update_available).length;
+   const badge=upd?`<span class="badge b-warn">${upd} update${upd>1?'s':''}</span>`:'<span class="badge b-ok">up to date</span>';
+   return `<tr style="cursor:pointer" data-st="${esc(n)}"><td><b>${esc(n)}</b></td><td class="num">${imgs.length}</td><td>${badge}</td><td class="mono" title="${esc(imgs.map(i=>i.image).join(', '))}">${esc(imgs.map(i=>i.image).slice(0,2).join(', '))}</td></tr>`;
+  }).join('');
+  html=rows;
+ }
+ if(html===lastDashHtml)return; // unchanged - zero DOM churn, no flicker
+ lastDashHtml=html;
+ tb.innerHTML=html;
+ tb.querySelectorAll('tr[data-st]').forEach(tr=>{tr.onclick=()=>openStack(tr.dataset.st)});
+}
+
+/* ----------------------------------------------------------------- stacks */
+let stacksLoaded=false;
+async function loadStacks(){
+ const tb=$('stackRows');
+ if(!stacksLoaded)tb.innerHTML='<tr><td colspan=6 class="empty">Loading…</td></tr>';
+ try{
+  const s=await api('/api/stacks');
+  $('stackCheckInfo').textContent=s.checked_at?('checked '+ago(s.checked_at)):'no check data yet';
+  let html;
+  if(!s.stacks.length)html='<tr><td colspan=6 class="empty">No stacks found - check Settings.</td></tr>';
+  else{
+   html='';
+   s.stacks.forEach(st=>{
+    const svcs=Object.entries(st.services||{});
+    if(!svcs.length){html+=`<tr><td><b>${esc(st.name)}</b></td><td colspan=4 class="empty">no images / no check data</td>
+     <td><button class="btn sm sec" data-st="${st.id}" data-nm="${esc(st.name)}" data-act="redeploy">Update</button></td></tr>`;return}
+    const updN=Object.values(st.services).filter(v=>v.update_available).length;
+    svcs.forEach(([svc,v],i)=>{
+     const badge=v.update_available?`<span class="badge b-warn" title="available for ${v.lag_days??0} days">update: ${esc(v.latest_tag||'digest')}</span>`
+       :v.note?'<span class="badge b-mut" title="'+esc(v.note)+'">not verified</span>':'<span class="badge b-ok">current</span>';
+     const mode=v.mode==='digest'?'latest (digest)':v.mode==='semver'?'pinned (version)':
+                v.mode==='pinned-digest'?'digest-pinned':'unknown';
+     html+=`<tr>
+      ${i===0?`<td rowspan="${svcs.length}"><b>${esc(st.name)}</b>${updN?` <span class="badge b-warn">${updN}</span>`:''}<br>
+        <a href="#" data-nm="${esc(st.name)}" data-act="open">manage</a></td>`:''}
       <td>${esc(svc)}</td><td class="mono" title="${esc(v.image)}">${esc(v.image)}</td>
-      <td><span class="badge b-mut" title="${esc(v.note || '')}">${mode}</span></td><td>${badge}</td>
+      <td><span class="badge b-mut" title="${esc(v.note||'')}">${mode}</span></td><td>${badge}</td>
       <td><button class="btn sm sec" data-id="${st.id}" data-svc="${esc(svc)}" data-act="pin">Version</button></td></tr>`;
-            });
-          });
-        }
-        if (html !== lastStacksHtml) {lastStacksHtml = html; tb.innerHTML = html} // diff-render: no flicker
-        stacksLoaded = true;
-      } catch (e) {tb.innerHTML = `<tr><td colspan=6 class="empty">${esc(e.message)}</td></tr>`}
-    }
-
-    /* delegated click actions for dynamically built rows */
-    document.addEventListener('click', e => {
-      const el = e.target.closest('[data-act]');
-      if (!el) return;
-      e.preventDefault();
-      const act = el.dataset.act;
-      if (act === 'open') openStack(el.dataset.nm);
-      if (act === 'pin') openStack(null, +el.dataset.id, null, el.dataset.svc);
-      if (act === 'redeploy') redeployStack(+el.dataset.st, el.dataset.nm);
     });
+   });
+  }
+  if(html!==lastStacksHtml){lastStacksHtml=html;tb.innerHTML=html} // diff-render: no flicker
+  stacksLoaded=true;
+ }catch(e){tb.innerHTML=`<tr><td colspan=6 class="empty">${esc(e.message)}</td></tr>`}
+}
 
-    /* per-stack update */
-    async function redeployStack(id, name) {
-      if (!confirm(`Redeploy stack "${name}" now? Pulls images and restarts its containers.`)) return;
-      try {
-        const r = await api(`/api/stacks/${id}/redeploy`, {method: 'POST'});
-        toast(r.ok ? `Stack "${name}" redeployed` : `Redeploy FAILED - see run ${r.run_id}`, r.ok ? 'ok' : 'err')
-      }
-      catch (e) {toast(e.message, 'err')}
-    }
+/* delegated click actions for dynamically built rows */
+document.addEventListener('click',e=>{
+ const el=e.target.closest('[data-act]');
+ if(!el)return;
+ e.preventDefault();
+ const act=el.dataset.act;
+ if(act==='open')openStack(el.dataset.nm);
+ if(act==='pin')openStack(null,+el.dataset.id,null,el.dataset.svc);
+ if(act==='redeploy')redeployStack(+el.dataset.st,el.dataset.nm);
+});
 
-    /* ------------------------------------------------------------ stack modal */
-    let modalStackId = null;
-    async function openStack(name, focusSvc, focusSvcName) {
-      $('modalBg').classList.add('open'); $('mTitle').textContent = name || 'Stack';
-      $('mBody').innerHTML = '<div class="empty">loading…</div>'; $('mCompose').textContent = '';
-      try {
-        let id;
-        if (name) {
-          const st = await api('/api/stacks'); const meta = st.stacks.find(x => x.name === name);
-          if (!meta) throw new Error('stack not found'); id = meta.id
-        }
-        else id = focusSvc;
-        const d = await api('/api/stacks/' + id);
-        modalStackId = id;
-        $('mTitle').textContent = d.name;
-        $('mRedeploy').onclick = () => redeployStack(id, d.name);
-        $('mCompose').textContent = d.compose;
-        $('mBody').innerHTML = '';
-        const entries = Object.entries(d.images || {});
-        if (!entries.length) {$('mBody').innerHTML = '<div class="empty">No explicit images in compose file.</div>'; return }
-        const tbl = document.createElement('table');
-        const thead = document.createElement('thead');
-        thead.innerHTML = '<tr><th>Service</th><th>Current image</th><th>Set version</th></tr>';
-        tbl.appendChild(thead);
-        const body = document.createElement('tbody'); tbl.appendChild(body);
-        entries.forEach(([svc, img]) => {
-          const tr = body.insertRow();
-          const c1 = tr.insertCell(); c1.innerHTML = `<b>${esc(svc)}</b>`;
-          const c2 = tr.insertCell(); c2.className = 'mono'; c2.textContent = img;
-          const td = tr.insertCell();
-          const wrap = document.createElement('div'); wrap.className = 'row';
-          const sel = document.createElement('input');
-          sel.type = 'text'; sel.value = img; sel.style.cssText = 'flex:1;min-width:160px;max-width:280px';
-          const btn = document.createElement('button'); btn.className = 'btn sm'; btn.textContent = 'Apply & redeploy';
-          const hint = document.createElement('div'); hint.className = 'b-sub'; hint.style.cssText = 'color:var(--mut);font-size:12px';
-          hint.textContent = 'Edits the compose file permanently and redeploys the stack.';
-          const info = document.createElement('div'); info.className = 'tag-sel';
-          btn.onclick = async () => {
-            const val = sel.value.trim();
-            if (!/^[A-Za-z0-9_./:@-]+$/.test(val)) {toast('Invalid image reference', 'err'); return }
-            // warn if tag not in known registry tags
-            try {
-              const v = await api('/api/versions?image=' + encodeURIComponent(img));
-              const all = [...(v.semver_tags || []), ...(v.other_tags || [])];
-              const typed = val.replace(/^[^:]+:/, '');
-              if (all.length && typed && !all.includes(typed) && !val.includes('@sha256')) {
-                if (!confirm(`Tag "${typed}" not found in registry tag list. Deploy anyway?`)) return;
-              }
-            } catch (_) { }
-            btn.disabled = true; btn.textContent = 'Deploying…';
-            try {
-              await api(`/api/stacks/${id}/image`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({service: svc, image: val})
-              });
-              toast(`${svc} -> ${val} deployed`, 'ok'); loadStacks(); refresh();
-            } catch (e) {toast(e.message, 'err')}
-            btn.disabled = false; btn.textContent = 'Apply & redeploy';
-          };
-          const tagsBtn = document.createElement('button'); tagsBtn.className = 'btn sm sec'; tagsBtn.textContent = 'Show available tags';
-          tagsBtn.onclick = async () => {
-            tagsBtn.disabled = true; tagsBtn.textContent = 'Loading…';
-            try {
-              const v = await api('/api/versions?image=' + encodeURIComponent(img));
-              info.innerHTML = '';
-              const cur = (v.current_tag || '').trim();
-              const mk = t => {
-                const b = document.createElement('button'); b.textContent = t;
-                if (t === cur || img.endsWith(':' + t)) b.classList.add('cur');
-                b.onclick = () => {
-                  sel.value = img.replace(/:[^:@]+(@.*)?$/, '') + ':' + t;
-                  sel.style.borderColor = 'var(--acc)'; setTimeout(() => sel.style.borderColor = '', 900);
-                };
-                info.appendChild(b)
-              };
-              (v.semver_tags || []).slice(0, 24).forEach(mk);
-              (v.other_tags || []).slice(0, 10).forEach(mk);
-              if (!(v.semver_tags || []).length && !(v.other_tags || []).length) info.innerHTML = '<span class="mono">no tags found (private registry?)</span>';
-            } catch (e) {toast(e.message, 'err')}
-            tagsBtn.disabled = false; tagsBtn.textContent = 'Show available tags';
-          };
-          wrap.appendChild(sel); wrap.appendChild(btn); wrap.appendChild(tagsBtn);
-          td.appendChild(wrap); td.appendChild(hint); td.appendChild(info);
-          if (focusSvcName === svc) tr.style.outline = '1px solid var(--acc)';
-        });
-        $('mBody').appendChild(tbl);
-      } catch (e) {$('mBody').innerHTML = `<div class="empty">${esc(e.message)}</div>`}
-    }
-    function closeModal() {$('modalBg').classList.remove('open')}
-    $('modalBg').onclick = e => {if (e.target.id === 'modalBg') closeModal()};
+/* per-stack update */
+async function redeployStack(id,name){
+ if(!confirm(`Redeploy stack "${name}" now? Pulls images and restarts its containers.`))return;
+ try{const r=await api(`/api/stacks/${id}/redeploy`,{method:'POST'});
+  toast(r.ok?`Stack "${name}" redeployed`:`Redeploy FAILED - see run ${r.run_id}`,r.ok?'ok':'err')}
+ catch(e){toast(e.message,'err')}
+}
 
-    /* ---------------------------------------------------------------- history */
-    async function loadHistory() {
-      const tb = $('histRows');
-      tb.innerHTML = '<tr><td colspan=7 class="empty">Loading…</td></tr>';
-      try {
-        const hr = await api('/api/history');
-        const h = hr.history || [];
-        const okN = h.filter(r => r.success).length;
-        $('hRate').textContent = h.length ? Math.round(okN / h.length * 100) + '%' : '–';
-        const full = h.filter(r => r.kind === 'full');
-        const durs = full.map(r => r.duration_s).filter(x => x != null);
-        $('hDur').textContent = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) + 's' : '–';
-        if (!h.length) {tb.innerHTML = '<tr><td colspan=7 class="empty">No runs yet.</td></tr>'}
-        else {
-          tb.innerHTML = '';
-          [...h].reverse().forEach(r => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td class="mono">${esc(r.run_id)}</td><td>${esc(r.kind)}</td><td>${esc(r.trigger)}</td>
-     <td>${fmt(r.finished)}</td><td class="num">${r.duration_s ?? '?'}</td>
-     <td>${r.success ? '<span class="badge b-ok">success</span>' : '<span class="badge b-err">failed</span>'}</td>
+/* ------------------------------------------------------------ stack modal */
+let modalStackId=null;
+async function openStack(name,focusSvc,focusSvcName){
+ $('modalBg').classList.add('open');$('mTitle').textContent=name||'Stack';
+ $('mBody').innerHTML='<div class="empty">loading…</div>';$('mCompose').textContent='';
+ try{
+  let id;
+  if(name){const st=await api('/api/stacks');const meta=st.stacks.find(x=>x.name===name);
+   if(!meta)throw new Error('stack not found');id=meta.id}
+  else id=focusSvc;
+  const d=await api('/api/stacks/'+id);
+  modalStackId=id;
+  $('mTitle').textContent=d.name;
+  $('mRedeploy').onclick=()=>redeployStack(id,d.name);
+  $('mCompose').textContent=d.compose;
+  $('mBody').innerHTML='';
+  const entries=Object.entries(d.images||{});
+  if(!entries.length){$('mBody').innerHTML='<div class="empty">No explicit images in compose file.</div>';return}
+  const tbl=document.createElement('table');
+  const thead=document.createElement('thead');
+  thead.innerHTML='<tr><th>Service</th><th>Current image</th><th>Set version</th></tr>';
+  tbl.appendChild(thead);
+  const body=document.createElement('tbody');tbl.appendChild(body);
+  entries.forEach(([svc,img])=>{
+   const tr=body.insertRow();
+   const c1=tr.insertCell();c1.innerHTML=`<b>${esc(svc)}</b>`;
+   const c2=tr.insertCell();c2.className='mono';c2.textContent=img;
+   const td=tr.insertCell();
+   const wrap=document.createElement('div');wrap.className='row';
+   const sel=document.createElement('input');
+   sel.type='text';sel.value=img;sel.style.cssText='flex:1;min-width:160px;max-width:280px';
+   const btn=document.createElement('button');btn.className='btn sm';btn.textContent='Apply & redeploy';
+   const hint=document.createElement('div');hint.className='b-sub';hint.style.cssText='color:var(--mut);font-size:12px';
+   hint.textContent='Edits the compose file permanently and redeploys the stack.';
+   const info=document.createElement('div');info.className='tag-sel';
+   btn.onclick=async()=>{
+    const val=sel.value.trim();
+    if(!/^[A-Za-z0-9_./:@-]+$/.test(val)){toast('Invalid image reference','err');return}
+    // warn if tag not in known registry tags
+    try{
+     const v=await api('/api/versions?image='+encodeURIComponent(img));
+     const all=[...(v.semver_tags||[]),...(v.other_tags||[])];
+     const typed=val.replace(/^[^:]+:/,'');
+     if(all.length&&typed&&!all.includes(typed)&&!val.includes('@sha256')){
+      if(!confirm(`Tag "${typed}" not found in registry tag list. Deploy anyway?`))return;
+     }
+    }catch(_){}
+    btn.disabled=true;btn.textContent='Deploying…';
+    try{await api(`/api/stacks/${id}/image`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({service:svc,image:val})});
+     toast(`${svc} -> ${val} deployed`,'ok');loadStacks();refresh();
+    }catch(e){toast(e.message,'err')}
+    btn.disabled=false;btn.textContent='Apply & redeploy';
+   };
+   const tagsBtn=document.createElement('button');tagsBtn.className='btn sm sec';tagsBtn.textContent='Show available tags';
+   tagsBtn.onclick=async()=>{
+    tagsBtn.disabled=true;tagsBtn.textContent='Loading…';
+    try{
+     const v=await api('/api/versions?image='+encodeURIComponent(img));
+     info.innerHTML='';
+     const cur=(v.current_tag||'').trim();
+     const mk=t=>{const b=document.createElement('button');b.textContent=t;
+      if(t===cur||img.endsWith(':'+t))b.classList.add('cur');
+      b.onclick=()=>{sel.value=img.replace(/:[^:@]+(@.*)?$/,'')+':'+t;
+       sel.style.borderColor='var(--acc)';setTimeout(()=>sel.style.borderColor='',900);};
+      info.appendChild(b)};
+     (v.semver_tags||[]).slice(0,24).forEach(mk);
+     (v.other_tags||[]).slice(0,10).forEach(mk);
+     if(!(v.semver_tags||[]).length&&!(v.other_tags||[]).length)info.innerHTML='<span class="mono">no tags found (private registry?)</span>';
+    }catch(e){toast(e.message,'err')}
+    tagsBtn.disabled=false;tagsBtn.textContent='Show available tags';
+   };
+   wrap.appendChild(sel);wrap.appendChild(btn);wrap.appendChild(tagsBtn);
+   td.appendChild(wrap);td.appendChild(hint);td.appendChild(info);
+   if(focusSvcName===svc)tr.style.outline='1px solid var(--acc)';
+  });
+  $('mBody').appendChild(tbl);
+ }catch(e){$('mBody').innerHTML=`<div class="empty">${esc(e.message)}</div>`}
+}
+function closeModal(){$('modalBg').classList.remove('open')}
+$('modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
+
+/* ---------------------------------------------------------------- history */
+async function loadHistory(){
+ const tb=$('histRows');
+ tb.innerHTML='<tr><td colspan=7 class="empty">Loading…</td></tr>';
+ try{
+  const hr=await api('/api/history');
+  const h=hr.history||[];
+  const okN=h.filter(r=>r.success).length;
+  $('hRate').textContent=h.length?Math.round(okN/h.length*100)+'%':'–';
+  const full=h.filter(r=>r.kind==='full');
+  const durs=full.map(r=>r.duration_s).filter(x=>x!=null);
+  $('hDur').textContent=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length)+'s':'–';
+  if(!h.length){tb.innerHTML='<tr><td colspan=7 class="empty">No runs yet.</td></tr>'}
+  else{
+   tb.innerHTML='';
+   [...h].reverse().forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="mono">${esc(r.run_id)}</td><td>${esc(r.kind)}</td><td>${esc(r.trigger)}</td>
+     <td>${fmt(r.finished)}</td><td class="num">${r.duration_s??'?'}</td>
+     <td>${r.success?'<span class="badge b-ok">success</span>':'<span class="badge b-err">failed</span>'}</td>
      <td><button class="btn sm sec" data-run="${esc(r.run_id)}">Log</button></td>`;
-            tr.querySelector('[data-run]').onclick = () => showRunLog(r.run_id);
-            tb.appendChild(tr);
-          });
-        }
-      } catch (e) {tb.innerHTML = `<tr><td colspan=7 class="empty">${esc(e.message)}</td></tr>`}
-    }
-    $('cInvCard').onclick = () => showTab('stacks');
-    $('cLastCard').onclick = () => {if (lastFailedRun) showRunLog(lastFailedRun); else showTab('history')};
+    tr.querySelector('[data-run]').onclick=()=>showRunLog(r.run_id);
+    tb.appendChild(tr);
+   });
+  }
+ }catch(e){tb.innerHTML=`<tr><td colspan=7 class="empty">${esc(e.message)}</td></tr>`}
+}
+$('cInvCard').onclick=()=>showTab('stacks');
+$('cLastCard').onclick=()=>{if(lastFailedRun)showRunLog(lastFailedRun);else showTab('history')};
 
-    /* --------------------------------------------------------------- settings */
-    async function loadSettings() {
-      try {
-        const s = await api('/api/settings');
-        $('sUrl').value = s.portainer_url || ''; $('sKey').value = s.portainer_api_key || '';
-        $('sEid').value = s.portainer_endpoint_id ?? ''; $('sTls').checked = !!s.tls_verify;
-        $('sMode').value = s.update_schedule_mode || 'interval'; $('sTime').value = s.update_schedule_time || '03:30';
-        $('sDay').value = s.update_schedule_day ?? 0; $('sPar').value = s.max_parallel_deploys ?? 3;
-        $('sWait').value = s.deploy_wait_time ?? 300; $('sCompose').value = s.portainer_compose_dir || '';
-        $('sSelfStack').value = s.self_stack_name || '';
-        $('sIncludePortainer').checked = !!s.include_portainer;
-        $('sCache').value = s.check_cache_minutes ?? 30; $('sKeep').value = s.keep_backups ?? 5;
-        $('sHook').value = s.notify_webhook || ''; $('sRep').checked = !!(s.repairs && s.repairs.enabled);
-        toggleScheduleMode();
-        // server time + tz
-        try {
-          const st = await api('/api/status');
-          $('sServerTime').textContent = st.scheduler.server_time_local || '–';
-          $('sServerTz').textContent = st.scheduler.server_tz || '';
-        } catch (_) { }
-      } catch (e) {toast(e.message, 'err')}
-    }
-    function toggleScheduleMode() {
-      const m = $('sMode').value;
-      $('modeInterval').style.display = m === 'interval' ? '' : 'none';
-      $('modeTime').style.display = m !== 'interval' ? '' : 'none';
-      $('modeWeekly').style.display = m === 'weekly' ? '' : 'none';
-    }
-    $('sMode').onchange = toggleScheduleMode;
+/* --------------------------------------------------------------- settings */
+async function loadSettings(){
+ try{
+  const s=await api('/api/settings');
+  $('sUrl').value=s.portainer_url||'';$('sKey').value=s.portainer_api_key||'';
+  $('sEid').value=s.portainer_endpoint_id??'';$('sTls').checked=!!s.tls_verify;
+  $('sMode').value=s.update_schedule_mode||'interval';$('sTime').value=s.update_schedule_time||'03:30';
+  $('sDay').value=s.update_schedule_day??0;$('sPar').value=s.max_parallel_deploys??3;
+  $('sWait').value=s.deploy_wait_time??300;$('sCompose').value=s.portainer_compose_dir||'';
+  $('sSelfStack').value=s.self_stack_name||'';
+  $('sIncludePortainer').checked=!!s.include_portainer;
+  $('sCache').value=s.check_cache_minutes??30;$('sKeep').value=s.keep_backups??5;
+  $('sHook').value=s.notify_webhook||'';$('sRep').checked=!!(s.repairs_enabled??(s.repairs&&s.repairs.enabled));
+  toggleScheduleMode();
+  // server time + tz
+  try{
+   const st=await api('/api/status');
+   $('sServerTime').textContent=st.scheduler.server_time_local||'–';
+   $('sServerTz').textContent=st.scheduler.server_tz||'';
+  }catch(_){}
+ }catch(e){toast(e.message,'err')}
+}
+function toggleScheduleMode(){
+ const m=$('sMode').value;
+ $('modeInterval').style.display=m==='interval'?'':'none';
+ $('modeTime').style.display=m!=='interval'?'':'none';
+ $('modeWeekly').style.display=m==='weekly'?'':'none';
+}
+$('sMode').onchange=toggleScheduleMode;
 
-    /* endpoint scan: list Portainer endpoints, let user pick one */
-    $('btnScan').onclick = async () => {
-      const res = $('scanResult');
-      res.style.display = 'block'; res.textContent = 'scanning…';
-      try {
-        const u = $('sUrl').value.trim();
-        let q = '';
-        if (u || ($('sKey').value.trim() && $('sKey').value.trim() !== '***')) {
-          q = '?url=' + encodeURIComponent(u) + '&key=' + encodeURIComponent($('sKey').value.trim() === '***' ? '' : $('sKey').value.trim());
-        }
-        const r = await api('/api/endpoints' + q);
-        const box = document.createElement('div'); box.className = 'tag-sel';
-        r.endpoints.forEach(e => {
-          const b = document.createElement('button');
-          b.textContent = `${e.name} (ID ${e.id}${e.type === 1 ? ' · local' : ''})`;
-          b.onclick = () => {$('sEid').value = e.id; $('scanResult').style.display = 'none'};
-          box.appendChild(b);
-        });
-        res.innerHTML = '<div style="color:var(--mut);font-size:12px;margin-bottom:4px">click to select:</div>';
-        res.appendChild(box);
-        if (!r.endpoints.length) res.innerHTML = '<span class="mono">no endpoints found</span>';
-      } catch (e) {res.innerHTML = `<span class="mono">${esc(e.message)}</span>`}
-    };
-    $('btnSave').onclick = async () => {
-      try {
-        const body = {
-          portainer_url: $('sUrl').value.trim(),
-          max_parallel_deploys: +$('sPar').value || 3, deploy_wait_time: +$('sWait').value || 300,
-          keep_backups: +$('sKeep').value || 5,
-          portainer_compose_dir: $('sCompose').value.trim(), check_cache_minutes: +$('sCache').value || 30,
-          notify_webhook: $('sHook').value.trim(), self_stack_name: $('sSelfStack').value.trim(),
-          tls_verify: $('sTls').checked, include_portainer: $('sIncludePortainer').checked, self_stack_name: $('sSelfStack').value.trim()
-        };
-        const mode = $('sMode').value;
-        body.update_schedule_mode = mode;
-        if (mode === 'interval') body.update_interval_hours = +$('sInt').value || 168;
-        else {
-          body.update_schedule_time = $('sTime').value || '03:30';
-          if (mode === 'weekly') body.update_schedule_day = +$('sDay').value || 0;
-        }
-        if ($('sKey').value.trim() && $('sKey').value.trim() !== '***') body.portainer_api_key = $('sKey').value.trim();
-        if ($('sEid').value.trim() !== '') body.portainer_endpoint_id = +$('sEid').value;
-        await api('/api/settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-        toast('Settings saved', 'ok'); refresh();
-        // first-run convenience: only when credentials were JUST set
-        const firstRun = body.portainer_url && body.portainer_api_key;
-        if (firstRun) {
-          try {
-            await api('/api/check', {method: 'POST', body: JSON.stringify({force: true})});
-            toast('Connected. First check started - open Stacks to see per-service status', 'ok')
-          } catch (e) { }
-        }
-      } catch (e) {toast(e.message, 'err')}
-    };
-    $('btnTest').onclick = async () => {
-      $('testResult').textContent = 'testing…';
-      try {
-        const body = {portainer_url: $('sUrl').value.trim()};
-        const key = $('sKey').value.trim();
-        if (key && key !== '***') body.portainer_api_key = key;
-        const r = await api('/api/test', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(body)
-        });
-        $('testResult').textContent = `OK - Portainer ${r.version} · endpoint ${r.endpoint_id}`;
-      } catch (e) {$('testResult').textContent = 'FAILED: ' + e.message}
-    };
-    $('btnPrune').onclick = async () => {
-      if (!confirm('Docker prune deletes ALL unused images and build cache.\n\nRollback to previous image versions becomes impossible and re-pulling will take time.\n\nContinue?')) return;
-      try {
-        const r = await api('/api/prune', {method: 'POST'});
-        toast('Prune started - run ' + r.run_id, 'ok'); gateBusyFlag = true;
-        setBusyUI(true); ensureBannerTimer(); await refreshRunBanner()
-      }
-      catch (e) {toast(e.message, 'err')}
-    };
+/* endpoint scan: list Portainer endpoints, let user pick one */
+$('btnScan').onclick=async()=>{
+ const res=$('scanResult');
+ res.style.display='block';res.textContent='scanning…';
+ try{
+  const u=$('sUrl').value.trim();
+  let q='';
+  if(u||($('sKey').value.trim()&&$('sKey').value.trim()!=='***')){
+   q='?url='+encodeURIComponent(u)+'&key='+encodeURIComponent($('sKey').value.trim()==='***'?'':$('sKey').value.trim());
+  }
+  const r=await api('/api/endpoints'+q);
+  const box=document.createElement('div');box.className='tag-sel';
+  r.endpoints.forEach(e=>{
+   const b=document.createElement('button');
+   b.textContent=`${e.name} (ID ${e.id}${e.type===1?' · local':''})`;
+   b.onclick=()=>{$('sEid').value=e.id;$('scanResult').style.display='none'};
+   box.appendChild(b);
+  });
+  res.innerHTML='<div style="color:var(--mut);font-size:12px;margin-bottom:4px">click to select:</div>';
+  res.appendChild(box);
+  if(!r.endpoints.length)res.innerHTML='<span class="mono">no endpoints found</span>';
+ }catch(e){res.innerHTML=`<span class="mono">${esc(e.message)}</span>`}
+};
+$('btnSave').onclick=async()=>{
+ try{
+  const body={portainer_url:$('sUrl').value.trim(),
+   max_parallel_deploys:+$('sPar').value||3,deploy_wait_time:+$('sWait').value||300,
+   keep_backups:+$('sKeep').value||5,
+   portainer_compose_dir:$('sCompose').value.trim(),check_cache_minutes:+$('sCache').value||30,
+   notify_webhook:$('sHook').value.trim(),self_stack_name:$('sSelfStack').value.trim(),
+   tls_verify:$('sTls').checked,include_portainer:$('sIncludePortainer').checked,
+   repairs_enabled:$('sRep').checked};
+  const mode=$('sMode').value;
+  body.update_schedule_mode=mode;
+  if(mode==='interval')body.update_interval_hours=+$('sInt').value||168;
+  else{
+   body.update_schedule_time=$('sTime').value||'03:30';
+   if(mode==='weekly')body.update_schedule_day=+$('sDay').value||0;
+  }
+  if($('sKey').value.trim()&&$('sKey').value.trim()!=='***')body.portainer_api_key=$('sKey').value.trim();
+  if($('sEid').value.trim()!=='')body.portainer_endpoint_id=+$('sEid').value;
+  await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  toast('Settings saved','ok');refresh();
+  // first-run convenience: only when credentials were JUST set
+  const firstRun=body.portainer_url&&body.portainer_api_key;
+  if(firstRun){
+   try{await api('/api/check',{method:'POST',body:JSON.stringify({force:true})});
+    toast('Connected. First check started - open Stacks to see per-service status','ok')}catch(e){}
+  }
+ }catch(e){toast(e.message,'err')}
+};
+$('btnTest').onclick=async()=>{
+ $('testResult').textContent='testing…';
+ try{
+  const body={portainer_url:$('sUrl').value.trim()};
+  const key=$('sKey').value.trim();
+  if(key&&key!=='***')body.portainer_api_key=key;
+  const r=await api('/api/test',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  $('testResult').textContent=`OK - Portainer ${r.version} · endpoint ${r.endpoint_id}`;
+ }catch(e){$('testResult').textContent='FAILED: '+e.message}
+};
+$('btnPrune').onclick=async()=>{
+ if(!confirm('Docker prune deletes ALL unused images and build cache.\n\nRollback to previous image versions becomes impossible and re-pulling will take time.\n\nContinue?'))return;
+ try{const r=await api('/api/prune',{method:'POST'});
+  toast('Prune started - run '+r.run_id,'ok');gateBusyFlag=true;
+  setBusyUI(true);ensureBannerTimer();await refreshRunBanner()}
+ catch(e){toast(e.message,'err')}
+};
 
-    /* ---------------------------------------------------------------- actions */
-    function setBusyUI(busy) {
-      $('btnCheck').disabled = busy; $('btnUpdate').disabled = busy; $('btnPrune').disabled = busy;
-      $('btnRecheck').disabled = busy;
-    }
-    $('btnCheck').onclick = async () => {
-      try {
-        await api('/api/check', {method: 'POST', body: JSON.stringify({force: true})});
-        toast('Update check started', 'ok'); ensureBannerTimer(); setBusyUI(true);
-        gateBusyFlag = true; await refreshRunBanner()
-      }
-      catch (e) {toast(e.message, 'err')}
-    };
-    $('btnRecheck').onclick = () => $('btnCheck').onclick();
-    $('btnUpdate').onclick = async () => {
-      if (!confirm('Run full update now?\n\n- backs up Portainer data\n- prunes unused images + build cache\n- redeploys ALL stacks\n- updates Portainer itself\n\nThis takes several minutes.')) return;
-      try {
-        const r = await api('/api/update', {method: 'POST'});
-        toast('Full update started - run ' + r.run_id, 'ok', true);
-        gateBusyFlag = true; setBusyUI(true); ensureBannerTimer(); await refreshRunBanner();
-        showTab('dash')
-      }
-      catch (e) {toast(e.message, 'err')}
-    };
+/* ---------------------------------------------------------------- actions */
+function setBusyUI(busy){
+ $('btnCheck').disabled=busy;$('btnUpdate').disabled=busy;$('btnPrune').disabled=busy;
+ $('btnRecheck').disabled=busy;
+}
+$('btnCheck').onclick=async()=>{
+ try{await api('/api/check',{method:'POST',body:JSON.stringify({force:true})});
+  toast('Update check started','ok');ensureBannerTimer();setBusyUI(true);
+  gateBusyFlag=true;await refreshRunBanner()}
+ catch(e){toast(e.message,'err')}
+};
+$('btnRecheck').onclick=()=>$('btnCheck').onclick();
+$('btnUpdate').onclick=async()=>{
+ if(!confirm('Run full update now?\n\n- backs up Portainer data\n- prunes unused images + build cache\n- redeploys ALL stacks\n- updates Portainer itself\n\nThis takes several minutes.'))return;
+ try{const r=await api('/api/update',{method:'POST'});
+  toast('Full update started - run '+r.run_id,'ok',true);
+  gateBusyFlag=true;setBusyUI(true);ensureBannerTimer();await refreshRunBanner();
+  showTab('dash')}
+ catch(e){toast(e.message,'err')}
+};
 
-    /* ------------------------------------------------------------------- boot */
-    refresh(); setInterval(refresh, 15000);
-  </script>
+/* ------------------------------------------------------------------- boot */
+refresh();setInterval(refresh,15000);
+</script>
 </body>
-
 </html>
