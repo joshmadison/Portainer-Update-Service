@@ -27,7 +27,10 @@ DEFAULTS = {
     "portainer_url": "",
     "portainer_api_key": "",
     "portainer_endpoint_id": None,   # None = auto-detect via hostname
-    "update_interval_hours": 168,    # weekly
+    "update_interval_hours": 168,    # weekly - only used in "interval" mode
+    "update_schedule_mode": "interval",  # "interval" | "daily" | "weekly"
+    "update_schedule_time": "03:30",     # HH:MM, server-local time (TZ env)
+    "update_schedule_day": 0,            # 0=Monday .. 6=Sunday (weekly mode)
     "tls_verify": False,             # True = verify Portainer TLS cert
     "max_parallel_deploys": 3,
     "deploy_wait_time": 300,         # seconds to wait for containers to become ready
@@ -39,6 +42,8 @@ DEFAULTS = {
     "listen_port": 8090,
     "auth_token": "",                # if set: mutating API calls need Bearer token
     "notify_webhook": "",            # optional POST target for failure notifications
+    "self_stack_name": "",           # compose project name of THIS app when deployed
+                                     # as a Portainer stack (enables self-update-last)
     "repairs": {
         "enabled": True,
         # optional user-defined repair rules (see config.example.yaml);
@@ -50,12 +55,17 @@ DEFAULTS = {
 # validation table: key -> (type, min, max) - value ranges for ints
 INT_RANGES = {
     "update_interval_hours": (1, 8760),
+    "update_schedule_day": (0, 6),
     "max_parallel_deploys": (1, 10),
     "deploy_wait_time": (30, 3600),
     "keep_backups": (1, 100),
     "check_cache_minutes": (5, 720),
     "listen_port": (1, 65535),
     "portainer_endpoint_id": (None, None),
+}
+
+STR_ENUMS = {
+    "update_schedule_mode": ("interval", "daily", "weekly"),
 }
 
 
@@ -65,6 +75,16 @@ class ConfigError(ValueError):
 
 def validate(key: str, value):
     """Coerce + validate one setting. Raises ConfigError on garbage."""
+    if key in STR_ENUMS:
+        v = str(value or "").strip().lower()
+        if v not in STR_ENUMS[key]:
+            raise ConfigError(f"{key} must be one of: {', '.join(STR_ENUMS[key])}")
+        return v
+    if key == "update_schedule_time":
+        v = str(value or "").strip()
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ConfigError("update_schedule_time must be HH:MM (24h), e.g. 03:30")
+        return v
     if key in INT_RANGES:
         try:
             v = int(value)

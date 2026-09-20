@@ -46,11 +46,28 @@ def _auth_gate():
 
 
 def _client() -> Portainer:
+    """Portainer client; raises ConfigError-free PortainerError on failure.
+    Routes wanting a friendly 'not configured' message should check
+    _configured() first."""
     client = Portainer(get("portainer_url"), get("portainer_api_key"),
                        endpoint_id=get("portainer_endpoint_id"),
                        tls_verify=bool(get("tls_verify", False)))
     client.resolve_endpoint(socket.gethostname())
     return client
+
+
+def _configured() -> bool:
+    return bool(get("portainer_url") and get("portainer_api_key"))
+
+
+def _client_or_error():
+    """Returns (client, None) or (None, error_response)."""
+    if not _configured():
+        return None, _err("not configured - enter Portainer URL and API key in Settings", 400)
+    try:
+        return _client(), None
+    except PortainerError as e:
+        return None, _err(str(e), 502)
 
 
 # ------------------------------------------------------------------- static UI
@@ -72,13 +89,20 @@ def api_status():
         "busy": gate.is_busy(),
         "current": gate.current(),
         "interval_hours": get("update_interval_hours", 168),
+        "schedule_mode": get("update_schedule_mode", "interval"),
+        "schedule_time": get("update_schedule_time", "03:30"),
+        "schedule_day": int(get("update_schedule_day", 0)),
+        "schedule_desc": scheduler.schedule_desc(),
+        "server_time_local": time.strftime("%a %d.%m. %H:%M"),
+        "server_tz": time.strftime("%Z"),
         "next_check": scheduler.next_check,
         "next_full_update": scheduler.next_full_update,
         "consecutive_failures": scheduler.consecutive_failures,
         "last_tick": scheduler.last_tick,
         "now": time.time(),
     }
-    snap["configured"] = bool(get("portainer_url") and get("portainer_api_key"))
+    snap["configured"] = _configured()
+    snap["endpoint_configured"] = get("portainer_endpoint_id") is not None
     snap["auth_enabled"] = bool(get("auth_token", ""))
     return jsonify(snap)
 
@@ -98,14 +122,44 @@ def healthz():
 
 @app.route("/api/test", methods=["GET", "POST"])
 def api_test():
-    """Settings 'Test connection' button: verify API + resolve endpoint."""
+    """Settings 'Test connection' button: verify API + resolve endpoint.
+
+    Accepts optional body {"url": "...", "api_key": "..."} to test the
+    FIRST-RUN connection BEFORE saving anything to config.
+    """
+    body = request.get_json(silent=True) or {}
+    url = body.get("portainer_url") or get("portainer_url")
+    key = body.get("portainer_api_key") or get("portainer_api_key")
+    if not url or not key or key == "***":
+        return _err("not configured - Portainer URL and API key required", 400)
+    client = Portainer(url, key, tls_verify=bool(get("tls_verify", False)))
     try:
-        client = _client()
         st = client.status()
+        endpoint_id = client.resolve_endpoint(socket.gethostname())
     except PortainerError as e:
         return _err(str(e), 502)
     return jsonify({"ok": True, "version": st.get("Version") or st.get("version") or "?",
-                    "endpoint_id": client.endpoint_id})
+                    "endpoint_id": endpoint_id})
+
+
+@app.route("/api/endpoints")
+def api_endpoints():
+    """Scan Portainer for available endpoints (Settings 'Scan' button).
+    Accepts ?url=&key= params to scan BEFORE saving credentials."""
+    url = request.args.get("url") or get("portainer_url")
+    key = request.args.get("key") or get("portainer_api_key")
+    if not url or not key or key == "***":
+        return _err("not configured - Portainer URL and API key required", 400)
+    client = Portainer(url, key, tls_verify=bool(get("tls_verify", False)))
+    try:
+        eps = client.endpoints()
+    except PortainerError as e:
+        return _err(str(e), 502)
+    return jsonify({"ok": True, "endpoints": [
+        {"id": e.get("Id"), "name": e.get("Name"), "type": e.get("Type"),
+         "url": e.get("Snapshots", [{}])[0].get("DockerURL", "") if e.get("Snapshots") else ""}
+        for e in eps
+    ]})
 
 
 @app.route("/api/history")
@@ -145,11 +199,10 @@ def api_run_log(run_id):
 @app.route("/api/stacks")
 def api_stacks():
     """Cache-only read: NEVER triggers registry calls in the request thread."""
-    try:
-        client = _client()
-        eid = client.endpoint_id
-    except PortainerError as e:
-        return _err(str(e), 502)
+    client, e = _client_or_error()
+    if e:
+        return e
+    eid = client.endpoint_id
     check = checker.get_cached()  # returns snapshot immediately, refreshes in bg
     stacks = []
     for s in client.stacks():
@@ -171,12 +224,14 @@ def api_stacks():
 
 @app.route("/api/stacks/<int:stack_id>")
 def api_stack_detail(stack_id):
+    client, e = _client_or_error()
+    if e:
+        return e
+    eid = client.endpoint_id
     try:
-        client = _client()
-        eid = client.endpoint_id
         stacks = client.stacks()
-    except PortainerError as e:
-        return _err(str(e), 502)
+    except PortainerError as err:
+        return _err(str(err), 502)
     stack = next((s for s in stacks if s["Id"] == stack_id), None)
     if not stack:
         return _err("stack not found", 404)
@@ -293,12 +348,15 @@ def api_update():
 
 @app.route("/api/prune", methods=["POST"])
 def api_prune():
+    client, e = _client_or_error()
+    if e:
+        return e
     if not gate.try_acquire("prune"):
         return _err("another job is running - see /api/runs/current", 409)
     try:
         runlog = RunLogger("prune", "manual")
         gate.set_runlog(runlog)
-        updater.cleanup_docker(runlog.log)
+        updater.cleanup_docker(client, client.endpoint_id, runlog.log)
         runlog.step("docker_prune", True)
         runlog.finish(True)
         return jsonify({"ok": True, "run_id": runlog.run_id})
@@ -320,7 +378,9 @@ def api_settings_get():
 def api_settings_post():
     body = request.get_json(silent=True) or {}
     allowed = {"portainer_url", "portainer_api_key", "portainer_endpoint_id",
-               "update_interval_hours", "tls_verify", "max_parallel_deploys",
+               "update_interval_hours", "update_schedule_mode",
+               "update_schedule_time", "update_schedule_day",
+               "tls_verify", "max_parallel_deploys",
                "deploy_wait_time", "keep_backups", "portainer_compose_dir",
                "check_cache_minutes", "listen_port", "auth_token",
                "notify_webhook"}

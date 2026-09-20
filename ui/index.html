@@ -139,6 +139,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     <div class="card"><div class="lbl">Updates available</div><div class="val" id="cUpd">–</div><div class="sub" id="cUpdSub"></div></div>
     <div class="card" id="cLastCard" style="cursor:pointer" title="open failed run log"><div class="lbl">Last run</div><div class="val" id="cLast">–</div><div class="sub" id="cLastSub"></div></div>
     <div class="card"><div class="lbl">Next scheduled update</div><div class="val" id="cNext">–</div><div class="sub" id="cNextSub"></div></div>
+    <div class="card"><div class="lbl">Server time</div><div class="val" id="cServerTime" style="font-size:18px">–</div><div class="sub" id="cServerTzSub"></div></div>
     <div class="card"><div class="lbl">Total runs</div><div class="val" id="cRuns">–</div><div class="sub" id="cRunsSub"></div></div>
   </div>
 
@@ -194,11 +195,41 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
       <button class="btn sec sm" id="btnTest">Test connection</button>
       <span class="mono" id="testResult"></span>
     </div>
-    <label class="f">Endpoint ID (empty = auto-detect)</label><input type="number" id="sEid">
+    <label class="f">Portainer endpoint</label>
+    <div class="row">
+      <input type="number" id="sEid" placeholder="auto / endpoint id" style="flex:1;min-width:130px">
+      <button class="btn sec sm" id="btnScan">Scan</button>
+    </div>
+    <div id="scanResult" style="display:none;margin-top:8px"></div>
     <label class="f"><input type="checkbox" id="sTls"> Verify TLS certificate</label>
 
     <h2 style="margin-top:22px">Schedule &amp; deployment</h2>
-    <label class="f">Update interval (hours) - checks + full updates</label><input type="number" id="sInt" min="1" max="8760">
+    <label class="f">Schedule mode</label>
+    <select id="sMode" style="width:100%">
+      <option value="interval">Interval (every N hours)</option>
+      <option value="daily">Daily at time</option>
+      <option value="weekly">Weekly at time</option>
+    </select>
+    <div id="modeInterval">
+      <label class="f">Update interval (hours) - checks + full updates</label>
+      <input type="number" id="sInt" min="1" max="8760">
+    </div>
+    <div id="modeTime" style="display:none">
+      <label class="f">Run time (server time)</label>
+      <input type="time" id="sTime">
+    </div>
+    <div id="modeWeekly" style="display:none">
+      <label class="f">Weekday</label>
+      <select id="sDay" style="width:100%">
+        <option value="0">Monday</option><option value="1">Tuesday</option>
+        <option value="2">Wednesday</option><option value="3">Thursday</option>
+        <option value="4">Friday</option><option value="5">Saturday</option>
+        <option value="6">Sunday</option>
+      </select>
+    </div>
+    <div class="b-sub" style="color:var(--mut);font-size:12px;margin-top:8px">
+      Server time: <span id="sServerTime">–</span> (<span id="sServerTz">–</span>) — the schedule refers to this clock.
+    </div>
     <label class="f">Max parallel deploys</label><input type="number" id="sPar" min="1" max="10">
     <label class="f">Deploy wait time (seconds)</label><input type="number" id="sWait" min="30" max="3600">
     <label class="f">Backups to keep</label><input type="number" id="sKeep" min="1" max="100">
@@ -308,15 +339,23 @@ async function refresh(){
   $('cLastSub').textContent=lr?(ago(lr.finished)+' · '+lr.kind+' · '+(lr.duration_s??'?')+'s'):'no runs yet';
   if(s.scheduler){
    const nf=s.scheduler.next_full_update;
+   const desc=s.scheduler.schedule_desc||'';
+   // server time card
+   $('cServerTime').textContent=s.scheduler.server_time_local||'–';
+   $('cServerTzSub').textContent=(s.scheduler.server_tz||'')+' · '+desc;
    if(nf){
     const delta=Math.round((nf-Date.now()/1000)/60);
     if(delta<0){$('cNext').textContent='overdue';$('cNext').style.color='var(--warn)';
-      $('cNextSub').textContent='by '+Math.abs(delta)+' min · interval '+s.scheduler.interval_hours+'h'}
-    else{$('cNext').textContent=delta>=120?Math.round(delta/60)+'h':delta+'m';$('cNext').style.color='var(--txt)';
-      $('cNextSub').textContent='in '+delta+' min · interval '+s.scheduler.interval_hours+'h'}
+      $('cNextSub').textContent=`by ${Math.abs(delta)} min · ${desc}`}
+    else{
+     $('cNext').textContent=new Date(nf*1000).toLocaleString([],{
+      weekday:'short',hour:'2-digit',minute:'2-digit'});
+     $('cNext').style.color='var(--txt)';
+     $('cNextSub').textContent=`in ${delta>=120?Math.round(delta/60)+'h':delta+'m'}`;
+    }
    }
    if(s.scheduler.consecutive_failures>0){
-    $('cNextSub').textContent+=' · '+s.scheduler.consecutive_failures+' consecutive failures (backoff)';
+    $('cNextSub').textContent+=' · '+s.scheduler.consecutive_failures+' failures (backoff)';
    }
   }
   $('cRuns').textContent=s.runs_total??'–';
@@ -623,20 +662,66 @@ async function loadSettings(){
   const s=await api('/api/settings');
   $('sUrl').value=s.portainer_url||'';$('sKey').value=s.portainer_api_key||'';
   $('sEid').value=s.portainer_endpoint_id??'';$('sTls').checked=!!s.tls_verify;
-  $('sInt').value=s.update_interval_hours??168;$('sPar').value=s.max_parallel_deploys??3;
+  $('sMode').value=s.update_schedule_mode||'interval';$('sTime').value=s.update_schedule_time||'03:30';
+  $('sDay').value=s.update_schedule_day??0;$('sPar').value=s.max_parallel_deploys??3;
   $('sWait').value=s.deploy_wait_time??300;$('sCompose').value=s.portainer_compose_dir||'';
   $('sCache').value=s.check_cache_minutes??30;$('sKeep').value=s.keep_backups??5;
   $('sHook').value=s.notify_webhook||'';$('sRep').checked=!!(s.repairs&&s.repairs.enabled);
+  toggleScheduleMode();
+  // server time + tz
+  try{
+   const st=await api('/api/status');
+   $('sServerTime').textContent=st.scheduler.server_time_local||'–';
+   $('sServerTz').textContent=st.scheduler.server_tz||'';
+  }catch(_){}
  }catch(e){toast(e.message,'err')}
 }
+function toggleScheduleMode(){
+ const m=$('sMode').value;
+ $('modeInterval').style.display=m==='interval'?'':'none';
+ $('modeTime').style.display=m!=='interval'?'':'none';
+ $('modeWeekly').style.display=m==='weekly'?'':'none';
+}
+$('sMode').onchange=toggleScheduleMode;
+
+/* endpoint scan: list Portainer endpoints, let user pick one */
+$('btnScan').onclick=async()=>{
+ const res=$('scanResult');
+ res.style.display='block';res.textContent='scanning…';
+ try{
+  const u=$('sUrl').value.trim();
+  let q='';
+  if(u||($('sKey').value.trim()&&$('sKey').value.trim()!=='***')){
+   q='?url='+encodeURIComponent(u)+'&key='+encodeURIComponent($('sKey').value.trim()==='***'?'':$('sKey').value.trim());
+  }
+  const r=await api('/api/endpoints'+q);
+  const box=document.createElement('div');box.className='tag-sel';
+  r.endpoints.forEach(e=>{
+   const b=document.createElement('button');
+   b.textContent=`${e.name} (ID ${e.id}${e.type===1?' · local':''})`;
+   b.onclick=()=>{$('sEid').value=e.id;$('scanResult').style.display='none'};
+   box.appendChild(b);
+  });
+  res.innerHTML='<div style="color:var(--mut);font-size:12px;margin-bottom:4px">click to select:</div>';
+  res.appendChild(box);
+  if(!r.endpoints.length)res.innerHTML='<span class="mono">no endpoints found</span>';
+ }catch(e){res.innerHTML=`<span class="mono">${esc(e.message)}</span>`}
+};
 $('btnSave').onclick=async()=>{
  try{
-  const body={portainer_url:$('sUrl').value.trim(),update_interval_hours:+$('sInt').value||168,
+  const body={portainer_url:$('sUrl').value.trim(),
    max_parallel_deploys:+$('sPar').value||3,deploy_wait_time:+$('sWait').value||300,
    keep_backups:+$('sKeep').value||5,
    portainer_compose_dir:$('sCompose').value.trim(),check_cache_minutes:+$('sCache').value||30,
    notify_webhook:$('sHook').value.trim(),
    tls_verify:$('sTls').checked};
+  const mode=$('sMode').value;
+  body.update_schedule_mode=mode;
+  if(mode==='interval')body.update_interval_hours=+$('sInt').value||168;
+  else{
+   body.update_schedule_time=$('sTime').value||'03:30';
+   if(mode==='weekly')body.update_schedule_day=+$('sDay').value||0;
+  }
   if($('sKey').value.trim()&&$('sKey').value.trim()!=='***')body.portainer_api_key=$('sKey').value.trim();
   if($('sEid').value.trim()!=='')body.portainer_endpoint_id=+$('sEid').value;
   await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

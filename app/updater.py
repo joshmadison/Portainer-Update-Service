@@ -51,6 +51,11 @@ def _df_usage(path="/"):
         return None
 
 
+def _hostname() -> str:
+    import socket
+    return socket.gethostname()
+
+
 def _project_name(stack_name):
     return (stack_name or "").lower()
 
@@ -128,63 +133,61 @@ def preflight_checks(client: Portainer, log) -> tuple:
 
 # --------------------------------------------------------------------- backup
 def backup_portainer(client: Portainer, log, backup_dir) -> bool:
-    log("Creating Portainer backup...")
-    rc, out = _cli(["ps", "-q", "--filter", "name=^portainer$"])
-    cid = out.splitlines()[0].strip() if rc == 0 and out else ""
-    if not cid:
-        rc, out = _cli(["ps", "-q", "--filter", "ancestor=portainer/portainer-ce:latest"])
-        cid = out.splitlines()[0].strip() if rc == 0 and out else ""
-    if not cid:
-        log("[WARN] No running Portainer container found, skipping backup.")
+    """Portainer datastore backup via the Portainer API (/api/backup).
+    Admin-key required. Replaces the old alpine-tar-of-/data approach -
+    the API backup restores cleanly via /api/restore and needs no
+    ephemeral container."""
+    log("Creating Portainer backup (via Portainer API)...")
+    try:
+        data = client.backup()
+    except PortainerError as e:
+        log(f"[WARN] Portainer API backup failed: {e}")
         return False
-    rc, out = _cli(["inspect", "-f",
-                    "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Type}}|{{.Name}}{{.Source}}{{end}}{{end}}",
-                    cid])
-    line = out.splitlines()[0].strip() if rc == 0 and out else ""
-    if "|" not in line:
-        log("[WARN] Portainer has no /data mount, skipping backup.")
+    if not data or len(data) < 100:
+        log("[WARN] Portainer API backup returned empty data, skipping.")
         return False
-    mtype, source = line.split("|", 1)
     ts = time.strftime("%Y%m%d_%H%M%S")
     dest_dir = backup_dir / f"portainer_{ts}"
     dest_dir.mkdir(parents=True, exist_ok=True)
     archive = dest_dir / "portainer_data.tar.gz"
-    # `-v <path>:/data` works for both named volumes and bind mounts
-    rc2, out2 = _cli(["run", "--rm", "-v", f"{source}:/data", "-v", f"{dest_dir}:/backup",
-                      "alpine", "tar", "czf", "/backup/portainer_data.tar.gz", "-C", "/data", "."])
-    if rc2 == 0:
-        log(f"[OK] Portainer backup created: {archive}")
-        # rotation
-        backups = sorted(backup_dir.glob("portainer_*"))
-        keep = int(get("keep_backups", 5))
-        for old in backups[:-keep] if len(backups) > keep else []:
-            shutil.rmtree(old, ignore_errors=True)
-        log(f"[OK] Backup rotation completed (keeping last {keep}).")
-        return True
-    log(f"[WARN] Backup failed: {out2}")
-    return False
+    archive.write_bytes(data)
+    log(f"[OK] Portainer backup created: {archive}")
+    # rotation
+    backups = sorted(backup_dir.glob("portainer_*"))
+    keep = int(get("keep_backups", 5))
+    for old in backups[:-keep] if len(backups) > keep else []:
+        shutil.rmtree(old, ignore_errors=True)
+    log(f"[OK] Backup rotation completed (keeping last {keep}).")
+    return True
 
 
 # --------------------------------------------------------------------- cleanup
-def cleanup_docker(log) -> None:
-    """Image + buildcache prune ONLY.
+def cleanup_docker(client: Portainer, eid, log) -> None:
+    """Image + buildcache prune ONLY - via the Portainer API (admin key).
 
     The bash script ran `docker system prune -af`, which also deletes STOPPED
     containers and their networks - those mark 'intentionally stopped' user
     intent that redeploy_single_stack() relies on, and they hold one-off data.
     Images of stopped stacks are still protected by their containers.
+    Portainer API: POST /images/prune (dangling=false) + POST /build/prune
+    (all=true). NOTE: both require an ADMIN Portainer API key.
     """
-    log("Pruning unused images and build cache (containers/networks preserved)...")
-    rc1, out1 = _cli(["image", "prune", "-af"])
-    rc2, out2 = _cli(["builder", "prune", "-af"])
-    if rc1 == 0 and rc2 == 0:
-        reclaimed = ""
-        m = re.search(r"reclaimed\s+([0-9.]+\s*\w+)", out2 or out1)
-        if m:
-            reclaimed = f" (reclaimed {m.group(1)})"
-        log(f"[OK] Prune completed{reclaimed}")
-    else:
-        log(f"[WARN] Prune failed: {(out1 or out2)[:200]}")
+    log("Pruning unused images and build cache (via Portainer API)...")
+    try:
+        img = client.prune_images(eid)
+    except PortainerError as e:
+        log(f"[WARN] Image prune failed: {e}")
+        log("[INFO] Prune routes are admin-only - use an admin Portainer API key.")
+        return
+    reclaimed_img = img.get("SpaceReclaimed") or 0
+    try:
+        bld = client.prune_build_cache(eid)
+    except PortainerError as e:
+        log(f"[WARN] Build-cache prune failed: {e}")
+        bld = {}
+    reclaimed_bld = bld.get("SpaceReclaimed") or 0
+    total_mb = (reclaimed_img + reclaimed_bld) // (1024 * 1024)
+    log(f"[OK] Prune completed (reclaimed ~{total_mb} MB).")
 
 
 # --------------------------------------------------------------------- stacks
@@ -371,7 +374,8 @@ def wait_portainer_ready(client, log, timeout_s=90) -> bool:
 def update_portainer(log) -> bool:
     compose_dir = get("portainer_compose_dir", "")
     if not compose_dir:
-        log("[INFO] portainer_compose_dir not configured - skipping Portainer self-update.")
+        log("[INFO] Portainer self-update not configured "
+            "(portainer_compose_dir empty - normal in container mode).")
         return True
     from pathlib import Path
     if not (Path(compose_dir) / "docker-compose.yml").exists():
@@ -449,8 +453,72 @@ def _repair_stale_gateways(client, eid, log) -> bool:
     connection failures to host-published targets. Detection: compare every
     running container's gateway mapping against its CURRENT network gateways.
     Fix: redeploy the owning compose stack (re-evaluates host-gateway)."""
+    if not shutil.which("docker"):
+        # docker CLI missing (container mode): replicate the check via the
+        # Portainer docker-proxy API - inspect every running container
+        log("[INFO] docker CLI not found - gateway check via Portainer API...")
+        try:
+            cs = client.all_containers(eid)
+        except PortainerError as e:
+            log(f"[WARN] gateway check skipped: container query failed ({e})")
+            return True
+        ok = True
+        checked = 0
+        for c in cs:
+            if c.get("State") != "running":
+                continue
+            cid = c.get("Id")
+            labels = c.get("Labels") or {}
+            project = (labels.get("com.docker.compose.project") or "").lower()
+            cname = (c.get("Names") or ["?"])[0].lstrip("/")
+            try:
+                insp = client.inspect_container(cid, eid)
+            except PortainerError as e:
+                log(f"[WARN] gateway check: inspect {cname} failed ({e})")
+                continue
+            mapped = []
+            for h in (insp.get("Config", {}).get("ExtraHosts") or []):
+                alias, _, ip = (h or "").partition(":")
+                if alias in ("host.docker.internal", "host-gateway") and ip:
+                    mapped.append(ip)
+            gateways = [n.get("Gateway") for n in
+                        (insp.get("NetworkSettings", {}).get("Networks") or {}).values()]
+            gateways = [g for g in gateways if g]
+            if not mapped or not gateways:
+                continue
+            checked += 1
+            stale = [ip for ip in mapped if ip not in gateways]
+            if not stale:
+                log(f"[OK] {cname}: host-gateway ({mapped[0]}) matches current gateway.")
+                continue
+            if not project:
+                log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs {gateways}) "
+                    f"but no compose project label - cannot auto-recreate.")
+                ok = False
+                continue
+            log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs gateways {gateways}).")
+            stack = next((s for s in (client.stacks() or [])
+                          if (s.get("Name") or "").lower() == project
+                          and s.get("EndpointId") == eid), None)
+            if not stack:
+                log(f"[WARN] stale gateway on {cname}: project '{project}' has no "
+                    f"matching Portainer stack - recreate manually.")
+                ok = False
+                continue
+            if redeploy_single_stack(client, stack, eid, log):
+                log(f"[OK] {project} recreated with current gateway.")
+            else:
+                log(f"[ERROR] {project} recreate failed - manual recreate needed.")
+                ok = False
+        if not checked:
+            log("[INFO] no containers with host-gateway mappings found - nothing to check.")
+        return ok
+    # ---- docker-CLI branch (kept for host installs with CLI available) ----
     rc, out = _cli(["ps", "-q"])
-    if rc != 0 or not out.strip():
+    if rc != 0:
+        log(f"[WARN] docker ps failed ({out[:120]}) - gateway check skipped.")
+        return True
+    if not out.strip():
         log("[INFO] no running containers, skipping gateway check.")
         return True
     ids = out.split()
@@ -615,7 +683,7 @@ def run_full_update(runlog) -> bool:
     from pathlib import Path
     ok_backup = backup_portainer(client, runlog.log, Path(get("backup_dir")))
     runlog.step("backup", ok_backup, "" if ok_backup else "backup failed/skipped - continuing")
-    cleanup_docker(runlog.log)
+    cleanup_docker(client, eid, runlog.log)
     runlog.step("prune", True)
 
     try:

@@ -1,14 +1,17 @@
-"""Background scheduler: runs update checks + full updates on an interval
-configurable from the UI. No external cron needed.
+"""Background scheduler: runs update checks + full updates on a schedule
+configurable from the UI (interval hours OR time-of-day daily/weekly).
+No external cron needed.
 
-Hardened: boot grace period, persisted next-run timestamps, consecutive
-failure backoff, exception logging (never bare except), shared job gate.
+Hardened: boot grace period, persisted next-run timestamps + schedule spec,
+consecutive failure backoff, exception logging (never bare except), shared
+job gate.
 """
 import json
 import sys
 import threading
 import time
 import traceback
+from datetime import datetime, timedelta
 
 from . import checker, updater
 from .config import DATA_DIR, get, load
@@ -32,8 +35,44 @@ def _load_next() -> dict:
 def _save_next(next_check: float, next_full: float) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     tmp = NEXT_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"next_check": next_check, "next_full_update": next_full}), encoding="utf-8")
+    tmp.write_text(json.dumps({
+        "next_check": next_check, "next_full_update": next_full,
+        "spec": _spec(),
+    }), encoding="utf-8")
     tmp.replace(NEXT_FILE)
+
+
+def _schedule_desc() -> str:
+    """Human-readable description of the active schedule."""
+    mode = get("update_schedule_mode", "interval")
+    if mode == "interval":
+        return f"every {get('update_interval_hours', 168)}h"
+    t = get("update_schedule_time", "03:30")
+    if mode == "weekly":
+        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        return f"{days[int(get('update_schedule_day', 0)) % 7]} at {t}"
+    return f"daily at {t}"
+
+
+def _next_full_from(now_ts: float) -> float:
+    """Compute the next full-update epoch from the configured schedule."""
+    mode = get("update_schedule_mode", "interval")
+    if mode != "daily" and mode != "weekly":
+        return now_ts + max(1, int(get("update_interval_hours", 168))) * 3600
+    t = get("update_schedule_time", "03:30")
+    try:
+        hh, mm = (int(x) for x in t.split(":", 1))
+    except (ValueError, AttributeError):
+        hh, mm = 3, 30  # defensive fallback for hand-edited config
+    now = datetime.fromtimestamp(now_ts)  # naive local time (TZ env applies)
+    cand = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if cand <= now:
+        cand += timedelta(days=1)
+    if mode == "weekly":
+        target_wd = int(get("update_schedule_day", 0)) % 7
+        while cand.weekday() != target_wd:
+            cand += timedelta(days=1)
+    return time.mktime(cand.timetuple())  # DST-aware local -> epoch
 
 
 class Scheduler:
@@ -50,12 +89,16 @@ class Scheduler:
     def start(self):
         if self._thread and self._thread.is_alive():
             return
-        # rehydrate persisted schedule; apply boot grace to the full update
+        # rehydrate persisted schedule; apply boot grace to the full update.
+        # If the saved schedule spec differs from the current config (mode/
+        # time changed in the UI or config.yaml edited), recompute from now.
         saved = _load_next()
         now = time.time()
         self._started_at = now
         self.next_check = max(saved.get("next_check", now + 15), now + 10)
-        full = saved.get("next_full_update", now + BOOT_GRACE_S)
+        full = saved.get("next_full_update", _next_full_from(now))
+        if saved.get("spec") != _spec():
+            full = _next_full_from(now)  # schedule changed while we were off
         self.next_full_update = max(full, now + BOOT_GRACE_S)
         self._persist()
         self._stop.clear()
@@ -90,6 +133,9 @@ class Scheduler:
                 self._bump_check()
                 self._bump_full()
 
+    def schedule_desc(self) -> str:
+        return _schedule_desc()
+
     def _interval(self) -> int:
         try:
             return max(1, int(get("update_interval_hours", 168)))
@@ -101,12 +147,23 @@ class Scheduler:
         self._persist()
 
     def _bump_full(self):
-        base = self._interval() * 3600
-        # consecutive-failure backoff
-        if self.consecutive_failures > 0:
-            backoff = min(MAX_BACKOFF_S, base * min(self.consecutive_failures, 6))
-            base = max(base, backoff)
-        self.next_full_update = time.time() + base
+        """Compute the next full-update slot. For time-of-day schedules the
+        base comes from _next_full_from(); consecutive-failure backoff adds
+        ON TOP of the next slot (never skips a slot completely)."""
+        now = time.time()
+        if get("update_schedule_mode", "interval") == "interval":
+            base = self._interval() * 3600
+            # consecutive-failure backoff
+            if self.consecutive_failures > 0:
+                backoff = min(MAX_BACKOFF_S, base * min(self.consecutive_failures, 6))
+                base = max(base, backoff)
+            self.next_full_update = now + base
+        else:
+            nxt = _next_full_from(now)
+            if self.consecutive_failures > 0:
+                backoff = min(MAX_BACKOFF_S, 3600 * min(self.consecutive_failures, 6))
+                nxt = max(nxt, now + backoff)
+            self.next_full_update = nxt
         self._persist()
 
     def _client(self):

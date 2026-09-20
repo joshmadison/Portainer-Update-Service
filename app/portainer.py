@@ -107,3 +107,20 @@ class Portainer:
     def image_inspect(self, image_ref, eid=None):
         ref = quote(image_ref, safe=":@")
         return self._docker("GET", f"/images/{ref}/json", eid).json()
+
+    # ---------------------------------------------------------- prune/backup
+    def prune_images(self, eid=None):
+        """Portainer admin-only: prune ALL unused images (dangling=false)."""
+        filters = quote('{"dangling": ["false"]}', safe="")
+        return self._docker("POST", f"/images/prune?filters={filters}", eid).json()
+
+    def prune_build_cache(self, eid=None):
+        """Portainer admin-only: prune ALL build cache (all=true)."""
+        return self._docker("POST", "/build/prune?all=true", eid).json()
+
+    def backup(self, password=None):
+        """Download a Portainer datastore backup (tar.gz attachment).
+        Uses the app's session key as auth (admin required)."""
+        payload = {"password": password} if password else {}
+        r = self._req("POST", "/api/backup", json=payload, timeout=300)
+        return r.content
