@@ -84,6 +84,21 @@ class Portainer:
         self._req("PUT", f"/api/stacks/{stack_id}?endpointId={eid}",
                   json=payload, timeout=300)
 
+    def redeploy_git_stack(self, stack_id, eid, env=None, prune=True, pull=False):
+        """Redeploy a stack created from a git repository. The regular
+        update_stack() (PUT /stacks/{id} with StackFileContent) DETACHES git
+        stacks from their repository and redeploys the stale local clone -
+        new commits would never arrive. This endpoint re-clones first."""
+        payload = {
+            "Env": env or [],
+            "Prune": prune,
+            # pull=False: compose rebuilds build: services anyway (>=2.26);
+            # a registry pull on build-only services errors out
+            "PullImage": pull,
+        }
+        self._req("PUT", f"/api/stacks/{stack_id}/git/redeploy?endpointId={eid}",
+                  json=payload, timeout=600)
+
     # ---------------------------------------------------------- docker proxy
     def _docker(self, method, path, eid=None, **kw):
         eid = eid or self.endpoint_id

@@ -289,7 +289,14 @@ class Scheduler:
                 self._notify_failure(runlog)
         except Exception:
             self.consecutive_failures += 1
-            print(f"[update] crashed:\n{traceback.format_exc()}", file=sys.stderr, flush=True)
+            err = traceback.format_exc()
+            print(f"[update] crashed:\n{err}", file=sys.stderr, flush=True)
+            # traceback MUST land in the run log (see _run_update)
+            try:
+                runlog.log("[ERROR] update crashed with unhandled "
+                           "exception:\n" + err)
+            except Exception:  # noqa: BLE001
+                pass
             runlog.finish(False)
         finally:
             # finish() is idempotent (self-stack update may have finalized it

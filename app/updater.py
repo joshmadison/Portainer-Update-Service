@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 from . import compose as compose_mod
 from .config import DATA_DIR, get
@@ -141,7 +142,6 @@ def preflight_checks(client: Portainer, log) -> tuple:
             log(f"[OK] Root FS usage: {usage}%")
 
     # Portainer compose dir (only needed for self-update)
-    from pathlib import Path
     compose_dir = "/host-portainer"
     if not Path(compose_dir).exists():
         log(f"[INFO] {compose_dir} not mounted - Portainer self-update "
@@ -337,7 +337,14 @@ def redeploy_single_stack(client, stack, eid, log) -> bool:
         return True
 
     try:
-        client.update_stack(sid, eid, content, env)
+        if stack.get("GitConfig"):
+            # git-based stack: the StackFileContent PUT would DETACH it from
+            # its repository and redeploy the stale local clone - new commits
+            # would never arrive. git/redeploy re-clones first.
+            log(f"[INFO] {name}: git-based stack -> git/redeploy (re-clones the repo).")
+            client.redeploy_git_stack(sid, eid, env)
+        else:
+            client.update_stack(sid, eid, content, env)
     except PortainerError as e:
         log(f"[ERROR] Failed to redeploy {name}: {e}")
         return False
@@ -495,14 +502,17 @@ def _update_portainer_compose_cli(compose_dir: str, log) -> bool:
     if p.returncode != 0 or up.returncode != 0:
         log(f"[ERROR] Portainer self-update failed: {out[:300]}")
         return False
-    # compose up returned - Portainer restarts: wait for the API
-    time.sleep(5)
-    rc, out3 = _cli(["ps", "-q", "--filter", "name=^portainer$",
-                     "--filter", "status=running"])
-    if rc == 0 and out3:
-        log("[OK] Portainer self-update completed.")
-        return True
-    log("[ERROR] compose up reported success but Portainer is not running.")
+    # compose up returned - Portainer restarts: wait for the container to
+    # come back (a slow restart needs more than one probe)
+    for attempt in range(10):
+        time.sleep(5)
+        rc, out3 = _cli(["ps", "-q", "--filter", "name=^portainer$",
+                         "--filter", "status=running"])
+        if rc == 0 and out3:
+            log("[OK] Portainer self-update completed.")
+            return True
+        log(f"[INFO] Portainer container not running yet (probe {attempt + 1}/10)...")
+    log("[ERROR] Portainer container did not come back after self-update.")
     return False
 
 
@@ -637,7 +647,8 @@ def _repair_stale_gateways(client, eid, log) -> bool:
                 log(f"[WARN] gateway check: inspect {cname} failed ({e})")
                 continue
             mapped = []
-            for h in (insp.get("Config", {}).get("ExtraHosts") or []):
+            # Docker keeps extra_hosts in HostConfig (NOT Config)
+            for h in (insp.get("HostConfig", {}).get("ExtraHosts") or []):
                 alias, _, ip = (h or "").partition(":")
                 # only EXPLICIT IPs can go stale. The keyword 'host-gateway'
                 # is stored unresolved and re-resolved at every container
@@ -658,10 +669,23 @@ def _repair_stale_gateways(client, eid, log) -> bool:
                     f"but no compose project label - cannot auto-recreate.")
                 ok = False
                 continue
-            log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs gateways {gateways}).")
-            stack = next((s for s in (client.stacks() or [])
-                          if (s.get("Name") or "").lower() == project
-                          and s.get("EndpointId") == eid), None)
+            log(f"[WARN] {cname}: stale host-gateway ({stale[0]} vs docker0 {host_gw}).")
+            # skip if the whole stack is intentionally stopped
+            try:
+                prj_cs = client.containers_by_project(project, eid)
+                if prj_cs and not any(c.get("State") == "running" for c in prj_cs):
+                    log(f"[INFO] {project} fully stopped -> skip recreate (user intent).")
+                    continue
+            except PortainerError:
+                pass
+            try:
+                stack = next((s for s in (client.stacks() or [])
+                              if (s.get("Name") or "").lower() == project
+                              and s.get("EndpointId") == eid), None)
+            except PortainerError as e:
+                log(f"[ERROR] cannot fetch stack '{project}' for recreate: {e}")
+                ok = False
+                continue
             if not stack:
                 log(f"[WARN] stale gateway on {cname}: project '{project}' has no "
                     f"matching Portainer stack - recreate manually.")
@@ -889,7 +913,6 @@ def run_full_update(runlog) -> bool:
         return False
     runlog.step("preflight", True)
 
-    from pathlib import Path
     ok_backup = backup_portainer(client, runlog.log, Path(get("backup_dir")))
     runlog.step("backup", ok_backup, "" if ok_backup else "backup failed/skipped - continuing")
     cleanup_docker(client, eid, runlog.log)
