@@ -32,6 +32,9 @@ DEFAULTS = {
     "update_schedule_time": "03:30",     # HH:MM, server-local time (TZ env)
     "update_schedule_day": 0,            # 0=Monday .. 6=Sunday (weekly mode)
     "tls_verify": False,             # True = verify Portainer TLS cert
+    "tls_ca_file": "",               # path to a CA bundle/cert (inside this
+                                      # container) to verify a self-signed
+                                      # Portainer cert against
     "max_parallel_deploys": 3,
     "deploy_wait_time": 300,         # seconds to wait for containers to become ready
     "keep_backups": 5,
@@ -104,7 +107,7 @@ def validate(key: str, value):
         if v and not re.match(r"^https?://", v):
             raise ConfigError(f"{key} must start with http:// or https://")
         return v
-    if key in ("portainer_api_key", "auth_token"):
+    if key in ("portainer_api_key", "auth_token", "tls_ca_file"):
         return str(value or "").strip()
     if key == "include_portainer":
         if not isinstance(value, bool):

@@ -221,7 +221,8 @@ def _new_client():
     import socket
     client = Portainer(get("portainer_url"), get("portainer_api_key"),
                        endpoint_id=get("portainer_endpoint_id"),
-                       tls_verify=bool(get("tls_verify", False)))
+                       tls_verify=bool(get("tls_verify", False)),
+                       tls_ca_file=(get("tls_ca_file", "") or None))
     try:
         client.resolve_endpoint(socket.gethostname())
     except PortainerError:

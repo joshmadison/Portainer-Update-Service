@@ -51,7 +51,8 @@ def _client() -> Portainer:
     _configured() first."""
     client = Portainer(get("portainer_url"), get("portainer_api_key"),
                        endpoint_id=get("portainer_endpoint_id"),
-                       tls_verify=bool(get("tls_verify", False)))
+                       tls_verify=bool(get("tls_verify", False)),
+                       tls_ca_file=(get("tls_ca_file", "") or None))
     client.resolve_endpoint(socket.gethostname())
     return client
 
@@ -132,7 +133,8 @@ def api_test():
     key = body.get("portainer_api_key") or get("portainer_api_key")
     if not url or not key or key == "***":
         return _err("not configured - Portainer URL and API key required", 400)
-    client = Portainer(url, key, tls_verify=bool(get("tls_verify", False)))
+    client = Portainer(url, key, tls_verify=bool(get("tls_verify", False)),
+                          tls_ca_file=(get("tls_ca_file", "") or None))
     try:
         st = client.status()
         endpoint_id = client.resolve_endpoint(socket.gethostname())
@@ -150,7 +152,8 @@ def api_endpoints():
     key = request.args.get("key") or get("portainer_api_key")
     if not url or not key or key == "***":
         return _err("not configured - Portainer URL and API key required", 400)
-    client = Portainer(url, key, tls_verify=bool(get("tls_verify", False)))
+    client = Portainer(url, key, tls_verify=bool(get("tls_verify", False)),
+                          tls_ca_file=(get("tls_ca_file", "") or None))
     try:
         eps = client.endpoints()
     except PortainerError as e:
@@ -526,7 +529,7 @@ def api_settings_post():
     allowed = {"portainer_url", "portainer_api_key", "portainer_endpoint_id",
                "update_interval_hours", "update_schedule_mode",
                "update_schedule_time", "update_schedule_day",
-               "tls_verify", "max_parallel_deploys",
+               "tls_verify", "max_parallel_deploys", "tls_ca_file",
                "deploy_wait_time", "keep_backups",
                "check_cache_minutes", "listen_port", "auth_token",
                "notify_webhook", "include_portainer",

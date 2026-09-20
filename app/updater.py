@@ -431,7 +431,8 @@ def self_update_run(runlog) -> bool:
     scheduled run. History is finalized FIRST so the run is recorded."""
     client = Portainer(get("portainer_url"), get("portainer_api_key"),
                        endpoint_id=get("portainer_endpoint_id"),
-                       tls_verify=bool(get("tls_verify", False)))
+                       tls_verify=bool(get("tls_verify", False)),
+                       tls_ca_file=(get("tls_ca_file", "") or None))
     try:
         eid = client.resolve_endpoint(_hostname())
     except PortainerError as e:
@@ -929,7 +930,8 @@ def run_full_update(runlog) -> bool:
         return False
     client = Portainer(cfg_url, cfg_key,
                        endpoint_id=get("portainer_endpoint_id"),
-                       tls_verify=bool(get("tls_verify", False)))
+                       tls_verify=bool(get("tls_verify", False)),
+                       tls_ca_file=(get("tls_ca_file", "") or None))
     import socket
     try:
         eid = client.resolve_endpoint(socket.gethostname())

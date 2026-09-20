@@ -20,11 +20,16 @@ class PortainerError(RuntimeError):
 
 
 class Portainer:
-    def __init__(self, base_url, api_key, endpoint_id=None, tls_verify=False):
+    def __init__(self, base_url, api_key, endpoint_id=None, tls_verify=False,
+                 tls_ca_file=None):
         self.base = base_url.rstrip("/")
         self.session = requests.Session()
         self.session.headers["X-API-Key"] = api_key
-        self.session.verify = bool(tls_verify)
+        # tls_verify=false -> accept self-signed certs.
+        # tls_verify=true + tls_ca_file set -> verify against that CA (the
+        # way to make verification work with a self-signed Portainer cert:
+        # mount the cert and point tls_ca_file at it).
+        self.session.verify = tls_ca_file if tls_verify else False
         self.endpoint_id = endpoint_id
 
     # ------------------------------------------------------------------ HTTP
@@ -33,7 +38,15 @@ class Portainer:
         try:
             r = self.session.request(method, self.base + path, timeout=timeout, **kw)
         except requests.RequestException as e:
-            raise PortainerError(f"{method} {path} failed: {e}") from e
+            msg = str(e)
+            if isinstance(e, requests.exceptions.SSLError) or "SSLError" in msg \
+                    or "CERTIFICATE_VERIFY_FAILED" in msg:
+                msg = (f"{method} {path} failed: TLS certificate verification "
+                       f"failed ({msg[:200]}). This happens when Portainer serves "
+                       f"a self-signed certificate. Either disable 'Verify TLS "
+                       f"certificate' in Settings, or mount Portainer's cert and "
+                       f"set tls_ca_file in config/config.yaml.")
+            raise PortainerError(msg) from e
         if r.status_code >= 400:
             raise PortainerError(f"{method} {path} -> HTTP {r.status_code}: {r.text[:300]}")
         return r

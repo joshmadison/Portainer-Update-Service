@@ -119,7 +119,8 @@ then finishes with a Portainer self-update
 | `PUS_UPDATE_INTERVAL_HOURS` | 168 | Interval mode only — every N hours |
 | `PUS_UPDATE_SCHEDULE_TIME` | 03:30 | Run time (HH:MM, server-local) for daily/weekly |
 | `PUS_UPDATE_SCHEDULE_DAY` | 0 | Weekday for weekly mode (0 = Monday) |
-| `PUS_TLS_VERIFY` | false | Verify Portainer's TLS certificate |
+| `PUS_TLS_VERIFY` | false | Verify Portainer's TLS certificate — leave off for self-signed certs |
+| `PUS_TLS_CA_FILE` | — | Container path to a CA bundle/cert to verify a self-signed Portainer cert against (needs `PUS_TLS_VERIFY: "true"`) |
 | `PUS_MAX_PARALLEL_DEPLOYS` | 3 | Parallel stack redeploys |
 | `PUS_DEPLOY_WAIT_TIME` | 300 | Seconds to wait for containers to become healthy |
 | `PUS_KEEP_BACKUPS` | 5 | How many Portainer backups to keep |
@@ -155,7 +156,10 @@ See `config/config.example.yaml` for all keys and inline documentation.
 - The UI has **no login** — set `auth_token` to protect every mutating
   endpoint, or put an authenticated reverse proxy in front.
 - `tls_verify: false` accepts self-signed Portainer certificates (common on
-  home networks). Set `true` for valid certificates.
+  home networks). Set `true` only if Portainer has a valid certificate — or
+  keep it `true` for self-signed certs by setting `tls_ca_file` to the
+  container path of Portainer's certificate (e.g. mount the cert file and
+  point the setting at it).
 - The API key is stored in `config.yaml` (never committed, never returned
   by the API) and needs **admin** rights (prune + backup are admin-only).
 - No telemetry, no outbound calls except to your Portainer and the image

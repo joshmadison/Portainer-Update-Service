@@ -14,6 +14,11 @@ update_interval_hours: 168
 # Verify Portainer TLS certificate (false for self-signed LAN certs)
 tls_verify: false
 
+# Only needed with tls_verify: true AND a self-signed Portainer cert:
+# container path of the CA bundle / Portainer certificate to verify against
+# (mount the cert file into this container, e.g. /host-portainer/portainer.crt)
+tls_ca_file: ""
+
 # Deploy parallelism / wait time for containers to become ready
 max_parallel_deploys: 3
 deploy_wait_time: 300

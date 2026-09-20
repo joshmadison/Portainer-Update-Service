@@ -196,6 +196,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
     </div>
     <div id="scanResult" style="display:none;margin-top:8px"></div>
     <label class="f"><input type="checkbox" id="sTls"> Verify TLS certificate</label>
+    <div style="color:var(--mut);font-size:12px">Leave OFF for Portainer's default self-signed certificate (the normal case). Only enable it when Portainer has a real certificate (e.g. via reverse proxy with Let's Encrypt) — or mount Portainer's cert and set <span class="mono">tls_ca_file</span> in config/config.yaml.</div>
 
     <div class="divider"></div>
     <h2>Schedule</h2>
