@@ -20,7 +20,7 @@ class TestParseImage:
         # registry with port
         ("myhost.lan:5000/app/img:2.0", ("myhost.lan:5000", "app/img", "2.0")),
         # docker.io with explicit namespace (no library/ injection)
-        ("madison/paperless:2.11", ("docker.io", "madison/paperless", "2.11")),
+        ("acme/paperless:2.11", ("docker.io", "acme/paperless", "2.11")),
         # localhost registry
         ("localhost/foo:latest", ("localhost", "foo", "latest")),
         # digest pin
