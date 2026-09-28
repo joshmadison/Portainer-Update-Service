@@ -9,12 +9,16 @@ import yaml
 def services_images(compose_text: str) -> dict:
     """service name -> image ref (only services with an explicit image)."""
     try:
-        data = yaml.safe_load(compose_text) or {}
+        data = yaml.safe_load(compose_text)
     except yaml.YAMLError:
+        return {}
+    if not isinstance(data, dict):
+        # valid YAML but not a mapping (scalars, lists, ...) - not a compose file
         return {}
     out = {}
     for name, svc in (data.get("services") or {}).items():
-        img = (svc or {}).get("image")
+        svc = svc if isinstance(svc, dict) else {}
+        img = svc.get("image")
         if isinstance(img, str) and img.strip():
             out[name] = img.strip()
     return out

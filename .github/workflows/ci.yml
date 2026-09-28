@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --quiet --upgrade pip
+          pip install -r requirements.txt
+          pip install --quiet pytest pytest-timeout dukpy
+
+      - name: Compile gate (syntax)
+        run: python -m compileall -q app
+
+      - name: Import gate (liveness)
+        run: |
+          python -c "import app.main, app.scheduler, app.checker, app.updater; print('IMPORT OK')"
+
+      - name: Test suite
+        run: python -m pytest tests/ -q --timeout=30
+
+      - name: JS syntax gate (dukpy - catches duplicate let/const with zero build errors)
+        run: |
+          python - <<'EOF'
+          import re, pathlib
+          s = pathlib.Path('ui/index.html').read_text(encoding='utf-8')
+          js = '\n'.join(re.findall(r'<script>(.*?)</script>', s, re.S))
+          pathlib.Path('ui_extract.js').write_text(js, encoding='utf-8')
+          from dukpy import JSInterpreter
+          try:
+              JSInterpreter().evaljs(js)
+              print('JS PARSE OK')
+          except Exception as e:
+              if 'localStorage' in str(e):
+                  print('JS PARSE OK (sandboxed localStorage expected)')
+              else:
+                  raise SystemExit(f'JS SYNTAX ERROR: {e}')
+          EOF
+
+      - name: Duplicate-ID gate
+        run: |
+          python - <<'EOF'
+          import re, pathlib, collections
+          s = pathlib.Path('ui/index.html').read_text(encoding='utf-8')
+          ids = re.findall(r'id=([\'"]?)([\w-]+)\1', s)
+          dupes = [i for i, n in collections.Counter(i for _, i in ids).items() if n > 1]
+          assert not dupes, f'duplicate IDs: {dupes}'
+          print('ID GATE OK')
+          EOF

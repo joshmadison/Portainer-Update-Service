@@ -1,0 +1,19 @@
+# keep the build context minimal - never ship state, secrets or dev files
+# to the docker daemon (config/ may contain config.yaml with the API key)
+.git
+.github
+data/
+config/
+deploy/
+backups/
+logs/
+*.log
+*.lock
+*.md
+*.png
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+.venv/
+venv/

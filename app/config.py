@@ -13,9 +13,15 @@ from pathlib import Path
 import yaml
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+# PUS_DATA_DIR lets tests (and exotic deployments) relocate all state files
+# without touching the code - must be set BEFORE the app modules load.
+# PUS_CONFIG_DIR relocates the config file the same way (tests must not see
+# the developer's live config.yaml with real credentials in it).
+_DATA_DIR_OVERRIDE = os.environ.get("PUS_DATA_DIR", "")
+CONFIG_DIR = Path(os.environ.get("PUS_CONFIG_DIR", "")) \
+    if os.environ.get("PUS_CONFIG_DIR", "") else BASE_DIR / "config"
+DATA_DIR = Path(_DATA_DIR_OVERRIDE) if _DATA_DIR_OVERRIDE else BASE_DIR / "data"
 RUNS_DIR = DATA_DIR / "runs"
-CONFIG_DIR = BASE_DIR / "config"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 UI_DIR = BASE_DIR / "ui"
 
@@ -139,20 +145,32 @@ def load(force: bool = False) -> dict:
                         if k not in ("repairs", "repairs_enabled")})
             cfg["repairs"] = {**DEFAULTS["repairs"], **(user.get("repairs") or {})}
         # env overrides (container deployments): PUS_PORTAINER_URL, PUS_LISTEN_HOST, ...
+        # YAML coercion ONLY for keys whose type is int/bool/enum - string
+        # settings (auth_token, api_key, urls, ...) must be taken LITERALLY:
+        # yaml.safe_load("no") -> False (silently disabled auth!), keys with
+        # '#' were truncated as comments, numeric-looking keys became ints.
         for key in list(cfg.keys()):
             if key == "repairs":
                 continue
             env_val = os.environ.get(ENV_PREFIX + key.upper())
-            if env_val is not None and env_val != "":
+            if env_val is None or env_val == "":
+                continue
+            if key in INT_RANGES or key in STR_ENUMS or key == "update_schedule_time":
                 try:
-                    cfg[key] = yaml.safe_load(env_val)  # coerces true/false/ints/null
+                    cfg[key] = yaml.safe_load(env_val)  # coerces ints/HH:MM-safe
                 except yaml.YAMLError:
                     cfg[key] = env_val
+            elif key in ("tls_verify", "include_portainer"):
+                v = str(env_val).strip().lower()
+                cfg[key] = v in ("true", "1", "yes", "on")
+            else:
+                cfg[key] = env_val  # verbatim string
         # repairs_enabled: flat UI/API alias for cfg["repairs"]["enabled"]
         # (the nested dict is config.yaml-only; the UI toggles the flat key)
         env_rep = os.environ.get(ENV_PREFIX + "REPAIRS_ENABLED")
         if env_rep not in (None, ""):
-            cfg["repairs"]["enabled"] = bool(env_rep)
+            cfg["repairs"]["enabled"] = str(env_rep).strip().lower() in (
+                "true", "1", "yes", "on")
         elif "repairs_enabled" in user_vars(CONFIG_FILE):
             cfg["repairs"]["enabled"] = bool(user_vars(CONFIG_FILE)["repairs_enabled"])
         # expose the flat alias so /api/settings GET + UI checkbox stay in sync

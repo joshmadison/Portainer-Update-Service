@@ -32,17 +32,35 @@ MUTATING = {"POST", "PUT", "DELETE"}
 
 @app.before_request
 def _auth_gate():
+    """Two protections for mutating requests:
+
+    1. Bearer auth when auth_token is set (constant-time compare).
+    2. CSRF guard when it is NOT set: a cross-site form POST from any
+       website the user visits would otherwise trigger /api/update,
+       /api/prune, /api/self_update (browsers cannot set custom headers
+       cross-origin without a preflight, and simple form posts skip
+       preflight). Requiring a same-origin Origin header (or its absence
+       for same-origin/CLI requests) closes that path without affecting
+       the UI, which always sends a custom Authorization header.
+    """
     if request.method not in MUTATING:
         return None
     token = get("auth_token", "")
-    if not token:
-        return None  # auth disabled
-    supplied = request.headers.get("Authorization", "")
-    # constant-time compare to avoid timing leaks (plain == short-circuits)
-    import hmac
-    ok = hmac.compare_digest(supplied, f"Bearer {token}")
-    if not ok:
-        return _err("unauthorized - set Authorization: Bearer <auth_token>", 401)
+    if token:
+        supplied = request.headers.get("Authorization", "")
+        # constant-time compare to avoid timing leaks (plain == short-circuits)
+        import hmac
+        ok = hmac.compare_digest(supplied, f"Bearer {token}")
+        if not ok:
+            return _err("unauthorized - set Authorization: Bearer <auth_token>", 401)
+        return None
+    # no auth_token configured: enforce same-origin (CSRF protection).
+    origin = request.headers.get("Origin", "")
+    if origin:
+        base = request.host_url.rstrip("/")
+        if origin.rstrip("/") != base:
+            return _err("cross-site request rejected - enable auth_token to "
+                        "call the API from other origins", 403)
 
 
 def _client() -> Portainer:
@@ -563,7 +581,12 @@ def main():
     scheduler.start()
     host = get("listen_host", "127.0.0.1")
     port = int(get("listen_port", 8090))
-    # production WSGI server (waitress): graceful threads, no dev-server warning
+    # production WSGI server (waitress): graceful threads, no dev-server warning.
+    # ARCHITECTURAL INVARIANT: this app MUST run as a single process with N
+    # threads. The JobGate (app/jobs.py), checker caches and the state files
+    # (status.json/history.jsonl) are per-process - running under multiple
+    # workers (e.g. gunicorn -w 4) would race concurrent full-updates and
+    # corrupt state. Threads>1 is fine; workers>1 is not.
     from waitress import serve
     print(f"[update-service] listening on http://{host}:{port}")
     serve(app, host=host, port=port, threads=8)
