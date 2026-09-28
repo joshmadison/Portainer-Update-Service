@@ -53,7 +53,7 @@ All settings persist in the config volume and survive container rebuilds.
 ```yaml
 services:
   update-service:
-    build: https://github.com/<your-account>/Portainer-Update-Service.git
+    build: https://github.com/joshmadison/Portainer-Update-Service.git
     container_name: update-service
     restart: unless-stopped
     logging:
