@@ -392,6 +392,100 @@ def api_stack_redeploy(stack_id):
 
 
 # ------------------------------------------------------------------ versions
+@app.route("/api/stacks/<int:stack_id>/rollback_info")
+def api_rollback_info(stack_id):
+    """Diff for the rollback dialog: what 'Restore last healthy' would
+    change on this stack (current images vs the stored pre-update snapshot)."""
+    client, e = _client_or_error()
+    if e:
+        return e
+    try:
+        stack = next((s for s in client.stacks() if s["Id"] == stack_id), None)
+    except PortainerError as ex:
+        return _err(str(ex), 502)
+    if not stack:
+        return _err("stack not found", 404)
+    name = stack.get("Name") or f"stack-{stack_id}"
+    from . import snapshots as snap_mod
+    snap = snap_mod.get_snapshot(name)
+    if not snap:
+        return jsonify({"ok": False, "has_snapshot": False,
+                        "message": "No pre-update snapshot for this stack yet - "
+                                   "one is captured on the next update run."})
+    try:
+        content = client.stack_file(stack_id, client.endpoint_id)
+        current = updater._resolved_images(content, _stack_env_of(stack))
+    except (PortainerError, RuntimeError) as ex:
+        return _err(str(ex), 502)
+    rows = snap_mod.diff_snapshot(name, current)
+    return jsonify({"ok": True, "has_snapshot": True,
+                    "snapshot_ts": snap.get("ts"),
+                    "snapshot_run_id": snap.get("run_id"),
+                    "changes": rows,
+                    "unchanged": len((snap.get("images") or {}) or {}) - len(rows)})
+
+
+def _stack_env_of(stack) -> list:
+    return stack.get("Env") or []
+
+
+def _run_rollback_worker(runlog, stack_name, target_images):
+    try:
+        ok = updater.rollback_stack(runlog, stack_name, target_images)
+        runlog.finish(ok)
+    except Exception:
+        import traceback
+        err = traceback.format_exc()
+        try:
+            runlog.log("[ERROR] rollback crashed:\n" + err)
+        except Exception:  # noqa: BLE001
+            pass
+        runlog.finish(False)
+    finally:
+        gate.release()
+        from .scheduler import scheduler as sched
+        sched._bump_full()
+
+
+@app.route("/api/stacks/<int:stack_id>/rollback", methods=["POST"])
+def api_stack_rollback(stack_id):
+    """'Restore last healthy': async rollback of ONE stack to its stored
+    pre-update image snapshot. Gate acquired first, RunLogger second."""
+    body = request.get_json(silent=True) or {}
+    target = body.get("images") or {}
+    if not isinstance(target, dict) or not target:
+        return _err("images map required (service -> image)")
+    for svc, img in target.items():
+        if not re.match(r"^[A-Za-z0-9_./:@-]+$", svc) or \
+                not re.match(r"^[A-Za-z0-9_./:@${}-]+$", str(img)):
+            return _err("invalid service/image entry")
+    if not gate.try_acquire("rollback"):
+        return _err("another job is running - see /api/runs/current", 409)
+    runlog = None
+    try:
+        client, e = _client_or_error()
+        if e:
+            gate.release()
+            return e
+        stack = next((s for s in client.stacks() if s["Id"] == stack_id), None)
+        if not stack:
+            gate.release()
+            return _err("stack not found", 404)
+        runlog = RunLogger("rollback", "manual")
+        gate.set_runlog(runlog)
+        runlog.step("rollback_started", True)
+        threading.Thread(
+            target=_run_rollback_worker,
+            args=(runlog, stack.get("Name", ""), dict(target)),
+            daemon=True).start()
+        return jsonify({"ok": True, "run_id": runlog.run_id})
+    except PortainerError as e:
+        if runlog:
+            runlog.finish(False)
+            gate.release()
+        return _err(str(e), 502)
+
+
 @app.route("/api/versions")
 def api_versions():
     """Known tags for an image ref: /api/versions?image=nginx"""

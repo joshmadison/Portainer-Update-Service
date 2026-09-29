@@ -281,6 +281,7 @@ input[type=text],input[type=password],input[type=number],input[type=url]{width:1
         <button class="btn sm" id="mRedeploy">Update stack now</button>
         <button class="btn sec sm" onclick="closeModal()">Close</button>
       </div></div>
+    <div id="mRollback"></div>
     <div id="mBody"></div>
     <h3 style="margin-top:18px">Compose file</h3>
     <pre class="log" id="mCompose" style="max-height:260px"></pre>
@@ -585,6 +586,8 @@ async function openStack(name,focusSvc,focusSvcName){
   $('mRedeploy').onclick=()=>redeployStack(id,d.name);
   $('mCompose').textContent=d.compose;
   $('mBody').innerHTML='';
+  // rollback strip (before the service table): restore the pre-update snapshot
+  loadRollbackStrip(id,d.name);
   const entries=Object.entries(d.images||{});
   if(!entries.length){$('mBody').innerHTML='<div class="empty">No explicit images in compose file.</div>';return}
   const tbl=document.createElement('table');
@@ -648,6 +651,52 @@ async function openStack(name,focusSvc,focusSvcName){
   $('mBody').appendChild(tbl);
  }catch(e){$('mBody').innerHTML=`<div class="empty">${esc(e.message)}</div>`}
 }
+/* ----------------------------------------------------- rollback (restore last healthy) */
+async function loadRollbackStrip(stackId, stackName){
+ const box=$('mRollback');
+ box.innerHTML='';
+ let r;
+ try{r=await api(`/api/stacks/${stackId}/rollback_info`)}
+ catch(e){return}  // endpoint unavailable - ignore
+ if(!r.has_snapshot){return}
+ const when=r.snapshot_ts?new Date(r.snapshot_ts*1000).toLocaleString():'?';
+ if(!r.changes.length){
+  box.innerHTML=`<div class="banner" style="margin-bottom:10px"><div class="b-txt">
+   <b>Snapshot available</b><div class="b-sub">Pre-update images from ${esc(when)} - all services already match. Nothing to restore.</div></div></div>`;
+  return
+ }
+ const rows=r.changes.map(c=>
+  `<tr><td><b>${esc(c.service)}</b></td>
+   <td class="mono" style="color:var(--err)">${esc(c.current)}</td>
+   <td class="mono" style="color:var(--ok)">${esc(c.restore)}</td></tr>`).join('');
+ const strip=document.createElement('div');
+ strip.className='banner warn';
+ strip.style.marginBottom='10px';
+ strip.innerHTML=`<div class="b-txt"><b>Broken after an update?</b>
+  <div class="b-sub">Snapshot from ${esc(when)} (pre-update state) can restore ${r.changes.length} service(s):</div>
+  <table style="margin-top:8px;width:100%;font-size:12.5px">
+   <thead><tr><th style="text-align:left">Service</th><th style="text-align:left">Current</th><th style="text-align:left">Restore to</th></tr></thead>
+   <tbody>${rows}</tbody></table></div>`;
+ const btn=document.createElement('button');
+ btn.className='btn sm';btn.style.marginTop='8px';btn.textContent='Restore these versions';
+ btn.onclick=async()=>{
+  if(!btn.disabled){
+   btn.disabled=true;btn.textContent='Restoring…';
+   const images={};
+   r.changes.forEach(c=>images[c.service]=c.restore);
+   try{
+    const res=await api(`/api/stacks/${stackId}/rollback`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({images})});
+    toast(`Rollback started - run ${res.run_id}`,'ok',true);
+    gateBusyFlag=true;setBusyUI(true);ensureBannerTimer();await refreshRunBanner();
+   }catch(e){toast(e.message,'err');btn.disabled=false;btn.textContent='Restore these versions'}
+  }
+ };
+ strip.appendChild(btn);
+ box.appendChild(strip);
+}
+
 function closeModal(){$('modalBg').classList.remove('open')}
 $('modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
 

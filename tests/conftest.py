@@ -41,6 +41,20 @@ def tmp_state(tmp_path, monkeypatch):
 
 
 @pytest.fixture()
+def fake_configured(monkeypatch):
+    """Make _client_or_error()-style flows see a configured (dummy) Portainer:
+    the fake client never actually connects, so the URL can be anything."""
+    monkeypatch.setenv("PUS_PORTAINER_URL", "http://dummy.local:9000")
+    monkeypatch.setenv("PUS_PORTAINER_API_KEY", "ptr_dummy")
+    monkeypatch.setattr("app.config._cfg", None)
+    import app.config as cfg
+    importlib.reload(cfg)
+    import app.history as history
+    importlib.reload(history)
+    yield
+
+
+@pytest.fixture()
 def fake_client():
     """A duck-typed stand-in for app.portainer.Portainer.
 

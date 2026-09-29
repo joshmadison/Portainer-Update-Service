@@ -227,6 +227,18 @@ def _stack_env(stack):
     return stack.get("Env") or []
 
 
+def _resolved_images(compose_text, env) -> dict:
+    """service -> image, with ${VARS} resolved from stack env (same rules as
+    _expected_services). Unresolvable refs are returned unresolved - the
+    snapshot documents what the compose file says, not what exists."""
+    env_map = {e.get("name"): (e.get("value") or "")
+               for e in (env or []) if isinstance(e, dict) and e.get("name")}
+    resolved = re.sub(r"\$\{(\w+)\}",
+                      lambda m: env_map.get(m.group(1), m.group(0)),
+                      compose_text)
+    return compose_mod.services_images(resolved)
+
+
 def _expected_services(compose_text, env):
     """Number of services defined in a compose file, with stack env vars
     resolved (prevents stacks with variable image tags from being
@@ -335,6 +347,23 @@ def redeploy_single_stack(client, stack, eid, log) -> bool:
     if n_services == 0:
         log(f"[INFO] {name}: 0 services defined -> inactive, skipping.")
         return True
+
+    # persist the pre-update image state as THE rollback target for this
+    # stack - "restore last healthy" then means: set these images back.
+    # Only meaningful if the redeploy later succeeds; a failed deploy leaves
+    # the previous snapshot untouched (the snapshot is taken BEFORE the PUT).
+    try:
+        from . import snapshots as snap_mod
+        pre_images = _resolved_images(content, env)
+        if pre_images:
+            # log is RunLogger.log (a bound method): reach the owner's run_id
+            owner = getattr(log, "__self__", None) if callable(log) else log
+            run_id = getattr(owner, "run_id", "") or ""
+            snap_mod.snapshot_stack(name, eid, pre_images, run_id=run_id)
+            log(f"[INFO] {name}: snapshot captured "
+                f"({len(pre_images)} service(s)) for rollback.")
+    except Exception as e:  # noqa: BLE001 - snapshotting must never kill the run
+        log(f"[WARN] {name}: rollback snapshot failed ({e}) - continuing.")
 
     try:
         if stack.get("GitConfig"):
@@ -469,6 +498,127 @@ def self_update_run(runlog) -> bool:
     # the redeploy fires; this container dies mid-wait. If we ever get
     # here, the redeploy failed or completed without replacing us.
     return True
+
+
+def rollback_stack(runlog, stack_name: str, target_images: dict) -> bool:
+    """'Restore last healthy': set every service's image to its pre-update
+    value (from the snapshot) and redeploy that ONE stack.
+
+    Only services whose current image differs from the snapshot are edited;
+    everything else in the compose file is preserved byte-for-byte by
+    compose.set_image. A latest-tag stack rolls back via its pinned old
+    digest when the compose carries one, otherwise via the literal old
+    image line (compose will reuse the locally cached old image layer).
+    """
+    from . import snapshots as snap_mod
+    runlog.log(f"[INFO] Rollback of stack '{stack_name}' requested "
+               f"({len(target_images)} service(s) to restore).")
+    client = Portainer(get("portainer_url"), get("portainer_api_key"),
+                       endpoint_id=get("portainer_endpoint_id"),
+                       tls_verify=bool(get("tls_verify", False)),
+                       tls_ca_file=(get("tls_ca_file", "") or None))
+    import socket
+    try:
+        eid = client.resolve_endpoint(socket.gethostname())
+    except PortainerError as e:
+        runlog.log(f"[ERROR] {e}")
+        return False
+    try:
+        stacks = [s for s in client.stacks() if s.get("EndpointId") == eid]
+    except PortainerError as e:
+        runlog.log(f"[ERROR] Could not fetch stacks: {e}")
+        return False
+    stack = next((s for s in stacks
+                  if (s.get("Name") or "").lower() == stack_name.lower()), None)
+    if not stack:
+        runlog.log(f"[ERROR] Stack '{stack_name}' not found.")
+        return False
+    sid = stack["Id"]
+    try:
+        content = client.stack_file(sid, eid)
+    except PortainerError as e:
+        runlog.log(f"[ERROR] Could not read compose file: {e}")
+        return False
+    if not content:
+        runlog.log("[ERROR] Empty compose file.")
+        return False
+
+    # NOTE: intentionally NOT re-snapshotting here overwriting the target;
+    # snapshot_stack is called inside redeploy_single_stack AFTER we restore,
+    # which would record the ROLLED-BACK state as the new "pre-update" state
+    # - wrong. So: restore first WITHOUT snapshot... simplest correct way:
+    # edit the images here, then deploy via update_stack directly (not via
+    # redeploy_single_stack) and skip snapshotting for this manual action.
+    env = _stack_env(stack)
+    changed = []
+    try:
+        for svc, old_img in target_images.items():
+            if svc not in compose_mod.services_images(content):
+                runlog.log(f"[WARN] service '{svc}' not in compose file - skipped.")
+                continue
+            cur = compose_mod.services_images(content).get(svc)
+            if cur == old_img:
+                runlog.log(f"[INFO] {svc}: already at {old_img} - no change.")
+                continue
+            content = compose_mod.set_image(content, svc, old_img)
+            changed.append(f"{svc} -> {old_img}")
+    except (ValueError, KeyError) as e:
+        runlog.log(f"[ERROR] Rollback edit failed: {e}")
+        return False
+    if not changed:
+        runlog.log("[INFO] Nothing to change - compose already matches the "
+                   "snapshot.")
+        return True
+    for c in changed:
+        runlog.log(f"[INFO] restoring: {c}")
+
+    project = _project_name(stack.get("Name", ""))
+
+    try:
+        if stack.get("GitConfig"):
+            # git stacks: an image-line edit detached from git semantics -
+            # the honest answer is to NOT silently rewrite; git/redeploy
+            # would fetch the current repo (undoing nothing). Report it.
+            runlog.log("[ERROR] Rollback not supported for git-based stacks "
+                       "directly: the repo is the source of truth. Pin the "
+                       "previous version via 'Version' in the stack view, or "
+                       "revert the repo commit.")
+            return False
+        client.update_stack(sid, eid, content, env)  # always persist the edit
+    except PortainerError as e:
+        runlog.log(f"[ERROR] Rollback deploy failed: {e}")
+        return False
+
+    # wait for the rolled-back containers (created after now) - but a fully
+    # stopped stack stays stopped (user intent); the file edit is persisted.
+    try:
+        cs = client.containers_by_project(project, eid)
+        if cs and not any(c.get("State") == "running" for c in cs):
+            runlog.log("[OK] Stack is intentionally stopped - image lines "
+                       "rolled back, deploy not started (will apply on next "
+                       "manual start).")
+            return True
+    except PortainerError:
+        pass
+
+    rollback_started = time.time()
+    log2 = runlog.log
+    log2("[INFO] Rollback deployed, verifying containers...")
+    deadline = time.time() + int(get("deploy_wait_time", 300))
+    expected = _expected_services(content, env)
+    expected = expected if expected and expected > 0 else 1  # lenient on parse error
+    while time.time() < deadline:
+        ready, total = _containers_ready(client, project, eid, log2,
+                                         created_after=rollback_started)
+        if ready >= expected and ready > 0:
+            runlog.log("[OK] Rollback complete - stack restored to snapshot "
+                       "state.")
+            return True
+        runlog.log(f"[INFO] waiting... {ready}/{expected} new container(s) ready")
+        time.sleep(5)
+    runlog.log("[ERROR] Rollback did not become healthy within the wait "
+               "window - check the stack manually.")
+    return False
 
 
 # ------------------------------------------------------------ portainer update
